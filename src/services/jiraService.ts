@@ -1,0 +1,450 @@
+import { getApi, getJiraBaseUrl } from './api';
+import type { JiraProject, JiraIssue, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser } from '../types';
+
+// Atlassian Document Format type
+interface AdfDocument {
+  type: string;
+  version?: number;
+  content?: Array<{
+    type: string;
+    content?: Array<{
+      type: string;
+      text?: string;
+      marks?: Array<{ type: string }>;
+    }>;
+  }>;
+}
+
+interface JiraApiIssue {
+  id: string;
+  key: string;
+  fields: {
+    summary: string;
+    description?: string | AdfDocument;
+    status: {
+      id: string;
+      name: string;
+      statusCategory: {
+        key: string;
+      };
+    };
+    priority?: {
+      id: string;
+      name: string;
+      iconUrl?: string;
+    };
+    assignee?: {
+      displayName: string;
+      avatarUrls?: {
+        '48x48'?: string;
+      };
+    };
+    reporter?: {
+      displayName: string;
+      avatarUrls?: {
+        '48x48'?: string;
+      };
+    };
+    project: {
+      key: string;
+    };
+    issuetype: {
+      id: string;
+      name: string;
+      iconUrl?: string;
+    };
+    created: string;
+    updated: string;
+    duedate?: string;
+    labels?: string[];
+  };
+}
+
+interface JiraApiProject {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  lead?: {
+    displayName: string;
+    avatarUrls?: {
+      '48x48'?: string;
+    };
+  };
+  avatarUrls?: {
+    '48x48'?: string;
+  };
+}
+
+function mapStatusCategory(key: string): 'new' | 'indeterminate' | 'done' {
+  switch (key) {
+    case 'new':
+      return 'new';
+    case 'done':
+      return 'done';
+    default:
+      return 'indeterminate';
+  }
+}
+
+// Convert ADF (Atlassian Document Format) to plain text
+function adfToText(adf: AdfDocument | string | undefined): string | undefined {
+  if (!adf) return undefined;
+  if (typeof adf === 'string') return adf;
+
+  if (!adf.content) return undefined;
+
+  const extractText = (content: AdfDocument['content']): string => {
+    if (!content) return '';
+    return content
+      .map((block) => {
+        if (block.content) {
+          return block.content
+            .map((inline) => inline.text || '')
+            .join('');
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const text = extractText(adf.content);
+  return text || undefined;
+}
+
+function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
+  return {
+    id: apiIssue.id,
+    key: apiIssue.key,
+    summary: apiIssue.fields.summary,
+    description: adfToText(apiIssue.fields.description),
+    status: {
+      id: apiIssue.fields.status.id,
+      name: apiIssue.fields.status.name,
+      category: mapStatusCategory(apiIssue.fields.status.statusCategory.key),
+    },
+    priority: apiIssue.fields.priority
+      ? {
+          id: apiIssue.fields.priority.id,
+          name: apiIssue.fields.priority.name,
+          iconUrl: apiIssue.fields.priority.iconUrl,
+        }
+      : undefined,
+    assignee: apiIssue.fields.assignee
+      ? {
+          displayName: apiIssue.fields.assignee.displayName,
+          avatarUrl: apiIssue.fields.assignee.avatarUrls?.['48x48'],
+        }
+      : undefined,
+    reporter: apiIssue.fields.reporter
+      ? {
+          displayName: apiIssue.fields.reporter.displayName,
+          avatarUrl: apiIssue.fields.reporter.avatarUrls?.['48x48'],
+        }
+      : undefined,
+    projectKey: apiIssue.fields.project.key,
+    issueType: {
+      id: apiIssue.fields.issuetype.id,
+      name: apiIssue.fields.issuetype.name,
+      iconUrl: apiIssue.fields.issuetype.iconUrl,
+    },
+    created: apiIssue.fields.created,
+    updated: apiIssue.fields.updated,
+    dueDate: apiIssue.fields.duedate,
+    labels: apiIssue.fields.labels || [],
+  };
+}
+
+function mapProject(apiProject: JiraApiProject): JiraProject {
+  return {
+    id: apiProject.id,
+    key: apiProject.key,
+    name: apiProject.name,
+    description: apiProject.description,
+    lead: apiProject.lead
+      ? {
+          displayName: apiProject.lead.displayName,
+          avatarUrl: apiProject.lead.avatarUrls?.['48x48'],
+        }
+      : undefined,
+    avatarUrl: apiProject.avatarUrls?.['48x48'],
+  };
+}
+
+export async function getProjects(): Promise<JiraProject[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<JiraApiProject[]>(`${baseUrl}/rest/api/3/project`);
+  return response.data.map(mapProject);
+}
+
+export async function getProject(projectKey: string): Promise<JiraProject> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<JiraApiProject>(`${baseUrl}/rest/api/3/project/${projectKey}`);
+  return mapProject(response.data);
+}
+
+export async function getIssues(projectKey?: string, jql?: string): Promise<JiraIssue[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+
+  let query = jql || '';
+  if (projectKey && !jql) {
+    query = `project = "${projectKey}" ORDER BY updated DESC`;
+  }
+
+  // Use the new /rest/api/3/search/jql endpoint (old /rest/api/3/search is deprecated)
+  const response = await api.post<{ issues: JiraApiIssue[] }>(
+    `${baseUrl}/rest/api/3/search/jql`,
+    {
+      jql: query,
+      maxResults: 100,
+      fields: ['summary', 'description', 'status', 'priority', 'assignee', 'reporter', 'project', 'issuetype', 'created', 'updated', 'duedate', 'labels'],
+    }
+  );
+
+  return response.data.issues.map(mapIssue);
+}
+
+export async function getIssue(issueKey: string): Promise<JiraIssue> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<JiraApiIssue>(
+    `${baseUrl}/rest/api/3/issue/${issueKey}`,
+    {
+      params: {
+        fields: 'summary,description,status,priority,assignee,reporter,project,issuetype,created,updated,duedate,labels',
+      },
+    }
+  );
+  return mapIssue(response.data);
+}
+
+export async function getProjectStatuses(projectKey: string): Promise<JiraStatus[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<Array<{ statuses: Array<{ id: string; name: string; statusCategory: { key: string } }> }>>(
+    `${baseUrl}/rest/api/3/project/${projectKey}/statuses`
+  );
+
+  const statusMap = new Map<string, JiraStatus>();
+  response.data.forEach((issueType) => {
+    issueType.statuses.forEach((status) => {
+      if (!statusMap.has(status.id)) {
+        statusMap.set(status.id, {
+          id: status.id,
+          name: status.name,
+          category: mapStatusCategory(status.statusCategory.key),
+        });
+      }
+    });
+  });
+
+  return Array.from(statusMap.values());
+}
+
+export async function transitionIssue(issueKey: string, transitionId: string): Promise<void> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  await api.post(`${baseUrl}/rest/api/3/issue/${issueKey}/transitions`, {
+    transition: { id: transitionId },
+  });
+}
+
+export async function getTransitions(issueKey: string): Promise<Array<{ id: string; name: string; to: { id: string; name: string } }>> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<{ transitions: Array<{ id: string; name: string; to: { id: string; name: string } }> }>(
+    `${baseUrl}/rest/api/3/issue/${issueKey}/transitions`
+  );
+  return response.data.transitions;
+}
+
+export async function assignIssue(issueKey: string, accountId: string | null): Promise<void> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  await api.put(`${baseUrl}/rest/api/3/issue/${issueKey}/assignee`, {
+    accountId,
+  });
+}
+
+export async function searchIssues(searchText: string): Promise<JiraIssue[]> {
+  // Escape special characters in search text for JQL
+  const escapedText = searchText.replace(/"/g, '\\"');
+  const jql = `summary ~ "${escapedText}" OR description ~ "${escapedText}" ORDER BY updated DESC`;
+  return getIssues(undefined, jql);
+}
+
+// Get current user
+export async function getCurrentUser(): Promise<JiraUser> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<{
+    accountId: string;
+    displayName: string;
+    emailAddress?: string;
+    avatarUrls?: { '48x48'?: string };
+    active: boolean;
+  }>(`${baseUrl}/rest/api/3/myself`);
+
+  return {
+    accountId: response.data.accountId,
+    displayName: response.data.displayName,
+    emailAddress: response.data.emailAddress,
+    avatarUrl: response.data.avatarUrls?.['48x48'],
+    active: response.data.active,
+  };
+}
+
+// Get issues assigned to current user
+export async function getMyIssues(): Promise<JiraIssue[]> {
+  return getIssues(undefined, 'assignee = currentUser() AND resolution = EMPTY ORDER BY updated DESC');
+}
+
+// Get issues the user is watching
+export async function getWatchedIssues(): Promise<JiraIssue[]> {
+  return getIssues(undefined, 'watcher = currentUser() ORDER BY updated DESC');
+}
+
+// Get user's favorite/starred filters
+export async function getFavoriteFilters(): Promise<JiraFilter[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<Array<{
+    id: string;
+    name: string;
+    description?: string;
+    jql: string;
+    owner: {
+      displayName: string;
+      avatarUrls?: { '48x48'?: string };
+    };
+    favourite: boolean;
+  }>>(`${baseUrl}/rest/api/3/filter/favourite`);
+
+  return response.data.map((filter) => ({
+    id: filter.id,
+    name: filter.name,
+    description: filter.description,
+    jql: filter.jql,
+    owner: {
+      displayName: filter.owner.displayName,
+      avatarUrl: filter.owner.avatarUrls?.['48x48'],
+    },
+    favourite: filter.favourite,
+  }));
+}
+
+// Get comments for an issue
+export async function getIssueComments(issueKey: string): Promise<JiraComment[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<{
+    comments: Array<{
+      id: string;
+      body: string | { type: string; content: Array<{ type: string; content?: Array<{ text?: string }> }> };
+      author: {
+        displayName: string;
+        avatarUrls?: { '48x48'?: string };
+      };
+      created: string;
+      updated: string;
+    }>;
+  }>(`${baseUrl}/rest/api/3/issue/${issueKey}/comment`);
+
+  return response.data.comments.map((comment) => ({
+    id: comment.id,
+    body: typeof comment.body === 'string'
+      ? comment.body
+      : extractTextFromAdf(comment.body),
+    author: {
+      displayName: comment.author.displayName,
+      avatarUrl: comment.author.avatarUrls?.['48x48'],
+    },
+    created: comment.created,
+    updated: comment.updated,
+  }));
+}
+
+// Helper to extract text from Atlassian Document Format (ADF)
+function extractTextFromAdf(adf: { type: string; content?: Array<{ type: string; content?: Array<{ text?: string }> }> }): string {
+  if (!adf.content) return '';
+
+  return adf.content
+    .map((block) => {
+      if (block.content) {
+        return block.content
+          .map((inline) => inline.text || '')
+          .join('');
+      }
+      return '';
+    })
+    .join('\n');
+}
+
+// Get worklog for an issue
+export async function getIssueWorklog(issueKey: string): Promise<JiraWorklog[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<{
+    worklogs: Array<{
+      id: string;
+      author: {
+        displayName: string;
+        avatarUrls?: { '48x48'?: string };
+      };
+      comment?: string | { type: string; content: Array<{ type: string; content?: Array<{ text?: string }> }> };
+      started: string;
+      timeSpent: string;
+      timeSpentSeconds: number;
+    }>;
+  }>(`${baseUrl}/rest/api/3/issue/${issueKey}/worklog`);
+
+  return response.data.worklogs.map((worklog) => ({
+    id: worklog.id,
+    author: {
+      displayName: worklog.author.displayName,
+      avatarUrl: worklog.author.avatarUrls?.['48x48'],
+    },
+    comment: worklog.comment
+      ? (typeof worklog.comment === 'string' ? worklog.comment : extractTextFromAdf(worklog.comment))
+      : undefined,
+    started: worklog.started,
+    timeSpent: worklog.timeSpent,
+    timeSpentSeconds: worklog.timeSpentSeconds,
+  }));
+}
+
+// Add worklog to an issue
+export async function addWorklog(
+  issueKey: string,
+  timeSpent: string,
+  started: string,
+  comment?: string
+): Promise<void> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  await api.post(`${baseUrl}/rest/api/3/issue/${issueKey}/worklog`, {
+    timeSpent,
+    started,
+    comment: comment ? {
+      type: 'doc',
+      version: 1,
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: comment }] }],
+    } : undefined,
+  });
+}
+
+// Run a filter by ID
+export async function runFilter(filterId: string): Promise<JiraIssue[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+
+  // First get the filter to get its JQL
+  const filterResponse = await api.get<{ jql: string }>(`${baseUrl}/rest/api/3/filter/${filterId}`);
+
+  // Then run the JQL
+  return getIssues(undefined, filterResponse.data.jql);
+}
