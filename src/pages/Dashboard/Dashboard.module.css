@@ -352,6 +352,141 @@
   margin-bottom: var(--spacing-sm);
 }
 
+/* Activity chart */
+.chartCard {
+  min-height: 220px;
+}
+
+.svgChart {
+  width: 100%;
+  overflow: visible;
+  display: block;
+}
+
+.chartLegend {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Project filter chips */
+.projectFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.projectChip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.6;
+}
+
+.projectChip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.projectChipActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+/* Team workload */
+.workloadList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.workloadRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.workloadAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.workloadInitial {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.workloadName {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  width: 110px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workloadBarTrack {
+  flex: 1;
+  height: 10px;
+  background: var(--color-bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.workloadBar {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--color-primary);
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.workloadCount {
+  width: 28px;
+  text-align: right;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
 /* Issue key link */
 .issueKey {
   font-weight: 600;

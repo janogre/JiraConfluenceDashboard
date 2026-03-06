@@ -1,20 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
-import { FolderKanban, FileText, CheckSquare, Clock, AlertCircle, ExternalLink, User, Eye, Star } from 'lucide-react';
+import { FolderKanban, FileText, CheckSquare, Clock, AlertCircle, ExternalLink, User, Eye, BarChart2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardContent, Badge } from '../../components/common';
-import { getProjects, getIssues, getMyIssues, getWatchedIssues, getFavoriteFilters, runFilter } from '../../services/jiraService';
+import { getProjects, getIssues, getMyIssues, getWatchedIssues } from '../../services/jiraService';
 import { getRecentPages } from '../../services/confluenceService';
 import { useTodoStore } from '../../store/todoStore';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
-import type { JiraIssue, JiraFilter } from '../../types';
-import { useState } from 'react';
+import type { JiraIssue } from '../../types';
+import { ActivityChart } from './ActivityChart';
+import { TeamWorkload } from './TeamWorkload';
 import styles from './Dashboard.module.css';
 
 export function Dashboard() {
   const { getActiveTodos } = useTodoStore();
   const activeTodos = getActiveTodos();
   const configured = isConfigured();
-  const [selectedFilter, setSelectedFilter] = useState<JiraFilter | null>(null);
 
   const { data: projects, isLoading: loadingProjects, isError: errorProjects } = useQuery({
     queryKey: ['projects'],
@@ -24,7 +24,7 @@ export function Dashboard() {
 
   const { data: recentIssues, isLoading: loadingIssues, isError: errorIssues } = useQuery({
     queryKey: ['recentIssues'],
-    queryFn: () => getIssues(undefined, 'updated >= -7d ORDER BY updated DESC'),
+    queryFn: () => getIssues(undefined, 'created >= -30d OR resolutiondate >= -30d ORDER BY created DESC'),
     enabled: configured,
   });
 
@@ -40,16 +40,10 @@ export function Dashboard() {
     enabled: configured,
   });
 
-  const { data: favoriteFilters, isError: errorFilters } = useQuery({
-    queryKey: ['favoriteFilters'],
-    queryFn: getFavoriteFilters,
+  const { data: openAssignedIssues } = useQuery({
+    queryKey: ['openAssignedIssues'],
+    queryFn: () => getIssues(undefined, 'resolution = EMPTY AND assignee is not EMPTY ORDER BY updated DESC'),
     enabled: configured,
-  });
-
-  const { data: filterResults, isLoading: loadingFilterResults, isError: errorFilterResults } = useQuery({
-    queryKey: ['filterResults', selectedFilter?.id],
-    queryFn: () => runFilter(selectedFilter!.id),
-    enabled: !!selectedFilter,
   });
 
   const { data: recentPages, isLoading: loadingPages, isError: errorPages } = useQuery({
@@ -78,7 +72,6 @@ export function Dashboard() {
     // Not configured
   }
 
-  const recentIssuesList = recentIssues?.slice(0, 5) || [];
   const myIssuesList = myIssues?.slice(0, 5) || [];
   const watchedIssuesList = watchedIssues?.slice(0, 5) || [];
 
@@ -221,43 +214,31 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Favorittfiltre */}
-        <Card>
+        {/* Aktivitet siste 30 dager */}
+        <Card className={styles.chartCard}>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3><Star size={18} /> Favorittfiltre</h3>
+              <h3><Clock size={18} /> Aktivitet siste 30 dager</h3>
             </div>
           </CardHeader>
           <CardContent>
-            {errorFilters ? renderError('Kunne ikke laste filtre') : !favoriteFilters || favoriteFilters.length === 0 ? (
-              <p className={styles.empty}>Ingen favorittfiltre</p>
-            ) : (
-              <ul className={styles.filterList}>
-                {favoriteFilters.map((filter) => (
-                  <li key={filter.id}>
-                    <button
-                      className={`${styles.filterButton} ${selectedFilter?.id === filter.id ? styles.filterActive : ''}`}
-                      onClick={() => setSelectedFilter(selectedFilter?.id === filter.id ? null : filter)}
-                    >
-                      <Star size={14} />
-                      <span>{filter.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {selectedFilter && (
-              <div className={styles.filterResults}>
-                <h4>{selectedFilter.name} Results</h4>
-                {loadingFilterResults ? (
-                  <p className={styles.empty}>Laster...</p>
-                ) : errorFilterResults ? (
-                  renderError('Kunne ikke kjøre filteret')
-                ) : (
-                  renderIssueList(filterResults?.slice(0, 5) || [], 'Ingen saker matcher filteret')
-                )}
-              </div>
-            )}
+            {loadingIssues
+              ? <p className={styles.empty}>Laster...</p>
+              : errorIssues
+              ? renderError('Kunne ikke laste aktivitet')
+              : <ActivityChart issues={recentIssues || []} />}
+          </CardContent>
+        </Card>
+
+        {/* Åpne saker per person */}
+        <Card>
+          <CardHeader>
+            <div className={styles.cardHeaderContent}>
+              <h3><BarChart2 size={18} /> Åpne saker per person</h3>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <TeamWorkload issues={openAssignedIssues || []} />
           </CardContent>
         </Card>
 
@@ -276,7 +257,7 @@ export function Dashboard() {
               ? <p className={styles.empty}>Laster...</p>
               : errorIssues
               ? renderError('Kunne ikke laste siste aktivitet')
-              : renderIssueList(recentIssuesList, 'Ingen nylig aktivitet')}
+              : renderIssueList(recentIssues?.slice(0, 5) || [], 'Ingen nylig aktivitet')}
           </CardContent>
         </Card>
 
