@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Calendar, AlertCircle } from 'lucide-react';
+import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
 import {
@@ -13,7 +13,23 @@ import {
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraIssue } from '../../types';
+import { Timeline } from './Timeline';
 import styles from './Board.module.css';
+
+const STARRED_PROJECTS_KEY = 'board_starred_projects';
+
+function loadStarredProjects(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STARRED_PROJECTS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveStarredProjects(keys: Set<string>) {
+  localStorage.setItem(STARRED_PROJECTS_KEY, JSON.stringify([...keys]));
+}
 
 const COLUMNS = [
   { id: 'new', label: 'Å gjøre' },
@@ -24,9 +40,24 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
 export function Board() {
-  const [mode, setMode] = useState<'mine' | 'project'>('mine');
+  const [mode, setMode] = useState<'mine' | 'project' | 'timeline'>('mine');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
+  const [showAllDone, setShowAllDone] = useState(false);
+  const [starredProjects, setStarredProjects] = useState<Set<string>>(loadStarredProjects);
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
+  const [sortByDueDate, setSortByDueDate] = useState(false);
+
+  const toggleStarProject = (key: string) => {
+    setStarredProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      saveStarredProjects(next);
+      return next;
+    });
+  };
   const configured = isConfigured();
   const queryClient = useQueryClient();
 
@@ -41,7 +72,7 @@ export function Board() {
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
     queryFn: () => (mode === 'mine' ? getMyIssues() : getIssues(selectedProjectKey)),
-    enabled: configured && (mode === 'mine' || !!selectedProjectKey),
+    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline'))),
   });
 
   const { data: transitions } = useQuery({
@@ -139,8 +170,53 @@ export function Board() {
     dueDate ? new Date(dueDate) < new Date() : false;
 
   const displayedIssues = issues ?? [];
-  const getColumnIssues = (columnId: ColumnId) =>
-    displayedIssues.filter((issue) => issue.status.category === columnId);
+
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  // Derive unique priorities and assignees for filter dropdowns
+  const availablePriorities = [...new Set(
+    displayedIssues.map((i) => i.priority?.name).filter(Boolean) as string[]
+  )];
+  const availableAssignees = [...new Map(
+    displayedIssues
+      .filter((i) => i.assignee)
+      .map((i) => [i.assignee!.displayName, i.assignee!])
+  ).values()];
+
+  const getColumnIssues = (columnId: ColumnId) => {
+    let result = displayedIssues.filter((issue) => issue.status.category === columnId);
+
+    // Done-filter: siste måned
+    if (columnId === 'done' && !showAllDone) {
+      result = result.filter((issue) => {
+        const date = issue.resolutionDate || issue.updated;
+        return new Date(date) >= oneMonthAgo;
+      });
+    }
+
+    // Prioritetsfilter
+    if (filterPriority) {
+      result = result.filter((issue) => issue.priority?.name === filterPriority);
+    }
+
+    // Tildelt-filter
+    if (filterAssignee) {
+      result = result.filter((issue) => issue.assignee?.displayName === filterAssignee);
+    }
+
+    // Sortering på forfallsdato
+    if (sortByDueDate) {
+      result = [...result].sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+    }
+
+    return result;
+  };
 
   const renderCard = (issue: JiraIssue, index: number) => (
     <Draggable key={issue.key} draggableId={issue.key} index={index}>
@@ -226,21 +302,102 @@ export function Board() {
           >
             Prosjekt
           </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'timeline' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('timeline')}
+            disabled={!selectedProjectKey}
+            title={!selectedProjectKey ? 'Velg et prosjekt for å bruke tidslinje' : 'Vis tidslinje'}
+          >
+            Tidslinje
+          </button>
         </div>
 
-        {mode === 'project' && (
-          <select
-            className={styles.projectSelect}
-            value={selectedProjectKey}
-            onChange={(e) => setSelectedProjectKey(e.target.value)}
-          >
-            <option value="">Velg prosjekt…</option>
-            {projects?.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+        {(mode === 'project' || mode === 'timeline') && (
+          <div className={styles.projectSelectWrapper}>
+            <select
+              className={styles.projectSelect}
+              value={selectedProjectKey}
+              onChange={(e) => setSelectedProjectKey(e.target.value)}
+            >
+              <option value="">Velg prosjekt…</option>
+              {starredProjects.size > 0 && (
+                <optgroup label="Stjernemerket">
+                  {projects
+                    ?.filter((p) => starredProjects.has(p.key))
+                    .map((p) => (
+                      <option key={p.key} value={p.key}>
+                        ★ {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+              <optgroup label="Alle prosjekter">
+                {projects
+                  ?.filter((p) => !starredProjects.has(p.key))
+                  .map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.name}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
+            {selectedProjectKey && (
+              <button
+                className={`${styles.projectStarButton} ${starredProjects.has(selectedProjectKey) ? styles.projectStarActive : ''}`}
+                onClick={() => toggleStarProject(selectedProjectKey)}
+                title={starredProjects.has(selectedProjectKey) ? 'Fjern stjernemerke' : 'Stjernemerk prosjekt'}
+              >
+                <Star size={15} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {displayedIssues.length > 0 && mode !== 'timeline' && (
+          <div className={styles.filters}>
+            <select
+              className={styles.filterSelect}
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              title="Filtrer på prioritet"
+            >
+              <option value="">Alle prioriteter</option>
+              {availablePriorities.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+
+            <select
+              className={styles.filterSelect}
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              title="Filtrer på tildelt"
+            >
+              <option value="">Alle tildelte</option>
+              {availableAssignees.map((a) => (
+                <option key={a.displayName} value={a.displayName}>{a.displayName}</option>
+              ))}
+            </select>
+
+            <button
+              className={`${styles.sortButton} ${sortByDueDate ? styles.sortButtonActive : ''}`}
+              onClick={() => setSortByDueDate((v) => !v)}
+              title="Sorter etter forfallsdato"
+            >
+              <ArrowUpDown size={14} />
+              Forfallsdato
+            </button>
+
+            {(filterPriority || filterAssignee || sortByDueDate) && (
+              <button
+                className={styles.clearFiltersButton}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setSortByDueDate(false); }}
+                title="Fjern alle filtre"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         )}
 
         <button className={styles.refreshButton} onClick={() => refetch()} title="Oppdater">
@@ -262,6 +419,8 @@ export function Board() {
       {/* Board */}
       {isLoading ? (
         <LoadingOverlay message="Laster saker…" />
+      ) : mode === 'timeline' && selectedProjectKey ? (
+        <Timeline issues={issues ?? []} jiraBaseUrl={jiraBaseUrl} />
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
           <div className={styles.board}>
@@ -272,6 +431,16 @@ export function Board() {
                   <div className={styles.columnHeader}>
                     <h3 className={styles.columnTitle}>{column.label}</h3>
                     <span className={styles.columnCount}>{columnIssues.length}</span>
+                    {column.id === 'done' && (
+                      <button
+                        className={styles.doneFilterButton}
+                        onClick={() => setShowAllDone((v) => !v)}
+                        title={showAllDone ? 'Vis kun siste måned' : 'Vis alle ferdige'}
+                      >
+                        {showAllDone ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <span>{showAllDone ? 'Siste måned' : 'Alle'}</span>
+                      </button>
+                    )}
                   </div>
                   <Droppable droppableId={column.id}>
                     {(provided, snapshot) => (

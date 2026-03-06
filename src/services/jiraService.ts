@@ -56,7 +56,16 @@ interface JiraApiIssue {
     created: string;
     updated: string;
     duedate?: string;
+    resolutiondate?: string;
     labels?: string[];
+    startDate?: string;
+    parent?: {
+      key: string;
+      fields: {
+        summary: string;
+        issuetype?: { name: string; iconUrl?: string };
+      };
+    };
   };
 }
 
@@ -152,7 +161,14 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
     created: apiIssue.fields.created,
     updated: apiIssue.fields.updated,
     dueDate: apiIssue.fields.duedate,
+    startDate: apiIssue.fields.startDate,
+    resolutionDate: apiIssue.fields.resolutiondate,
     labels: apiIssue.fields.labels || [],
+    parent: apiIssue.fields.parent ? {
+      key: apiIssue.fields.parent.key,
+      summary: apiIssue.fields.parent.fields.summary,
+      issueType: apiIssue.fields.parent.fields.issuetype,
+    } : undefined,
   };
 }
 
@@ -201,7 +217,7 @@ export async function getIssues(projectKey?: string, jql?: string): Promise<Jira
     {
       jql: query,
       maxResults: 100,
-      fields: ['summary', 'description', 'status', 'priority', 'assignee', 'reporter', 'project', 'issuetype', 'created', 'updated', 'duedate', 'labels'],
+      fields: ['summary', 'description', 'status', 'priority', 'assignee', 'reporter', 'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate', 'labels', 'startDate', 'parent'],
     }
   );
 
@@ -215,7 +231,7 @@ export async function getIssue(issueKey: string): Promise<JiraIssue> {
     `${baseUrl}/rest/api/3/issue/${issueKey}`,
     {
       params: {
-        fields: 'summary,description,status,priority,assignee,reporter,project,issuetype,created,updated,duedate,labels',
+        fields: 'summary,description,status,priority,assignee,reporter,project,issuetype,created,updated,duedate,resolutiondate,labels',
       },
     }
   );

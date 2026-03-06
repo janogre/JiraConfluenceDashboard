@@ -4,7 +4,8 @@ import type { ConfluencePage, ConfluenceSpace } from '../types';
 interface ConfluenceApiPage {
   id: string;
   title: string;
-  space: {
+  type?: string;
+  space?: {
     key: string;
     name?: string;
   };
@@ -30,6 +31,11 @@ interface ConfluenceApiPage {
     };
   };
   excerpt?: string;
+  childTypes?: {
+    page?: {
+      value: boolean;
+    };
+  };
 }
 
 interface ConfluenceApiSpace {
@@ -46,13 +52,15 @@ interface ConfluenceApiSpace {
   };
 }
 
-function mapPage(apiPage: ConfluenceApiPage, baseUrl: string): ConfluencePage {
+function mapPage(apiPage: ConfluenceApiPage, baseUrl: string, fallbackSpaceKey?: string): ConfluencePage {
   const linkedBase = apiPage._links.base || baseUrl;
+  const isFolder = apiPage.type === 'folder';
   return {
     id: apiPage.id,
     title: apiPage.title,
-    spaceKey: apiPage.space.key,
-    spaceName: apiPage.space.name,
+    type: (apiPage.type as 'page' | 'blogpost' | 'folder') || 'page',
+    spaceKey: apiPage.space?.key || fallbackSpaceKey || '',
+    spaceName: apiPage.space?.name,
     url: `${linkedBase}${apiPage._links.webui}`,
     lastModified: apiPage.version?.when || '',
     lastModifiedBy: apiPage.version?.by
@@ -64,6 +72,8 @@ function mapPage(apiPage: ConfluenceApiPage, baseUrl: string): ConfluencePage {
         }
       : undefined,
     excerpt: apiPage.excerpt || apiPage.body?.excerpt?.value,
+    // Folders can contain pages or other folders — always treat as expandable
+    hasChildren: isFolder ? true : apiPage.childTypes?.page?.value,
   };
 }
 
@@ -80,16 +90,23 @@ function mapSpace(apiSpace: ConfluenceApiSpace, baseUrl: string): ConfluenceSpac
 export async function getSpaces(): Promise<ConfluenceSpace[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
-  const response = await api.get<{ results: ConfluenceApiSpace[] }>(
-    `${baseUrl}/wiki/rest/api/space`,
-    {
-      params: {
-        limit: 50,
-        expand: 'description.plain',
-      },
-    }
-  );
-  return response.data.results.map((space) => mapSpace(space, baseUrl));
+  const allSpaces: ConfluenceApiSpace[] = [];
+  let start = 0;
+  const limit = 50;
+
+  while (true) {
+    const response = await api.get<{ results: ConfluenceApiSpace[]; size: number }>(
+      `${baseUrl}/wiki/rest/api/space`,
+      {
+        params: { limit, start, expand: 'description.plain' },
+      }
+    );
+    allSpaces.push(...response.data.results);
+    if (response.data.results.length < limit) break;
+    start += limit;
+  }
+
+  return allSpaces.map((space) => mapSpace(space, baseUrl));
 }
 
 export async function getSpace(spaceKey: string): Promise<ConfluenceSpace> {
@@ -150,7 +167,7 @@ export async function searchPages(searchText: string, spaceKey?: string): Promis
     cql += ` AND space = "${spaceKey}"`;
   }
 
-  const response = await api.get<{ results: ConfluenceApiPage[] }>(
+  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
     `${baseUrl}/wiki/rest/api/content/search`,
     {
       params: {
@@ -160,16 +177,15 @@ export async function searchPages(searchText: string, spaceKey?: string): Promis
       },
     }
   );
-
-  return response.data.results.map((page) => mapPage(page, baseUrl));
+  const linkedBase = response.data._links?.base || baseUrl;
+  return response.data.results.map((page) => mapPage(page, linkedBase));
 }
 
 export async function getRecentPages(limit: number = 20): Promise<ConfluencePage[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
 
-  // Use CQL search to get recent pages, sorted by last modified
-  const response = await api.get<{ results: ConfluenceApiPage[] }>(
+  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
     `${baseUrl}/wiki/rest/api/content/search`,
     {
       params: {
@@ -179,8 +195,48 @@ export async function getRecentPages(limit: number = 20): Promise<ConfluencePage
       },
     }
   );
+  const linkedBase = response.data._links?.base || baseUrl;
+  return response.data.results.map((page) => mapPage(page, linkedBase));
+}
 
-  return response.data.results.map((page) => mapPage(page, baseUrl));
+export async function getSpaceHomePage(spaceKey: string): Promise<ConfluencePage> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+  const response = await api.get<{
+    key: string;
+    name: string;
+    _links: { base?: string; webui: string };
+    homepage: ConfluenceApiPage;
+  }>(`${baseUrl}/wiki/rest/api/space/${spaceKey}`, {
+    params: {
+      expand: 'homepage,homepage.version,homepage.childTypes.page',
+    },
+  });
+  const { _links, key, name, homepage } = response.data;
+  const linkedBase = _links.base || baseUrl;
+  if (!homepage.space) {
+    homepage.space = { key, name };
+  }
+  return mapPage(homepage, linkedBase, key);
+}
+
+export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+  // Use CQL parent= to get ALL child types (pages, folders, blogposts)
+  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+    `${baseUrl}/wiki/rest/api/content/search`,
+    {
+      params: {
+        cql: `parent=${pageId}`,
+        limit: 100,
+        expand: 'version,space,childTypes.page',
+      },
+    }
+  );
+  // Use _links.base from the response (includes /wiki), falling back to baseUrl
+  const linkedBase = response.data._links?.base || baseUrl;
+  return response.data.results.map((page) => mapPage(page, linkedBase));
 }
 
 export async function getPagesLinkedToIssue(issueKey: string): Promise<ConfluencePage[]> {

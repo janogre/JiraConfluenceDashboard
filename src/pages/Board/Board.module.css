@@ -11,6 +11,69 @@
   align-items: center;
   gap: var(--spacing-md);
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+
+.sortButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.sortButton:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.sortButtonActive {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-bg-hover);
+}
+
+.clearFiltersButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.clearFiltersButton:hover {
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
 }
 
 .modeToggle {
@@ -43,6 +106,12 @@
   box-shadow: var(--shadow-sm);
 }
 
+.projectSelectWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
 .projectSelect {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -52,6 +121,36 @@
   background: var(--color-bg-primary);
   cursor: pointer;
   min-width: 200px;
+}
+
+.projectStarButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.projectStarButton:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: var(--color-bg-hover);
+}
+
+.projectStarButton.projectStarActive {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.projectStarButton.projectStarActive svg {
+  fill: #f59e0b;
 }
 
 .refreshButton {
@@ -118,9 +217,31 @@
 .columnHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--spacing-xs);
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
+}
+
+.doneFilterButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  white-space: nowrap;
+}
+
+.doneFilterButton:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-bg-hover);
 }
 
 .columnTitle {

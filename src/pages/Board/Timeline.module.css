@@ -1,0 +1,280 @@
+.timelineWrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.navBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.navButton {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s;
+}
+
+.navButton:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.navLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 200px;
+  text-align: center;
+}
+
+.gridContainer {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Left panel */
+.leftPanel {
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 2px solid var(--color-border);
+  scrollbar-width: none;
+}
+
+.leftPanel::-webkit-scrollbar {
+  display: none;
+}
+
+.leftHeader {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Section header row ("Utgaver") */
+.sectionRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sectionRow:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.sectionLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.leftRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  cursor: default;
+  overflow: hidden;
+}
+
+.leftRow:hover {
+  background: var(--color-surface-hover, #f8fafc);
+}
+
+.epicRow {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.epicRow:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.childRow {
+  padding-left: 24px;
+}
+
+.chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  color: var(--color-text-muted);
+}
+
+.issueIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.issueKeyLink {
+  font-size: 0.75rem;
+  color: var(--color-primary, #3b82f6);
+  text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.issueKeyLink:hover {
+  text-decoration: underline;
+}
+
+.issueSummary {
+  font-size: 0.78rem;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Status badge */
+.statusBadge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.statusNew {
+  background: var(--color-surface-hover, #e2e8f0);
+  color: var(--color-text-muted, #64748b);
+}
+
+.statusInProgress {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.statusDone {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Right panel */
+.rightPanel {
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.monthHeader {
+  display: flex;
+  height: 36px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.monthCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  border-right: 1px solid var(--color-border);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.barsArea {
+  min-width: 600px;
+  position: relative;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  position: relative;
+}
+
+.bar {
+  position: absolute;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  text-decoration: none;
+  overflow: hidden;
+  transition: filter 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.bar:hover {
+  filter: brightness(0.88);
+  z-index: 3;
+}
+
+.barLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--color-primary, #3b82f6);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.monthGridLine {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-right: 1px solid var(--color-border, #e2e8f0);
+  pointer-events: none;
+}

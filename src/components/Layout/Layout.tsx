@@ -1,7 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
-  FolderKanban,
   FileText,
   Kanban,
   CheckSquare,
@@ -14,7 +13,6 @@ import styles from './Layout.module.css';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/projects', icon: FolderKanban, label: 'Projects' },
   { path: '/confluence', icon: FileText, label: 'Confluence' },
   { path: '/board', icon: Kanban, label: 'Jira Board' },
   { path: '/todos', icon: CheckSquare, label: 'My Todos' },

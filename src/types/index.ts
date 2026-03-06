@@ -43,7 +43,14 @@ export interface JiraIssue {
   created: string;
   updated: string;
   dueDate?: string;
+  startDate?: string;
+  resolutionDate?: string;
   labels: string[];
+  parent?: {
+    key: string;
+    summary: string;
+    issueType?: { name: string; iconUrl?: string };
+  };
 }
 
 export interface JiraStatus {
@@ -109,6 +116,8 @@ export interface ConfluencePage {
   };
   excerpt?: string;
   linkedIssues?: string[]; // Jira issue keys linked to this page
+  hasChildren?: boolean;
+  type?: 'page' | 'blogpost' | 'folder';
 }
 
 export interface ConfluenceSpace {

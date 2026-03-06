@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard/Dashboard';
-import { Projects } from './pages/Projects/Projects';
 import { Confluence } from './pages/Confluence/Confluence';
 import { Board } from './pages/Board/Board';
 import { Todos } from './pages/Todos/Todos';
@@ -25,7 +24,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
-            <Route path="projects" element={<Projects />} />
             <Route path="confluence" element={<Confluence />} />
             <Route path="board" element={<Board />} />
             <Route path="todos" element={<Todos />} />
