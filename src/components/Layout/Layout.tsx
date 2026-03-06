@@ -16,7 +16,7 @@ const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/projects', icon: FolderKanban, label: 'Projects' },
   { path: '/confluence', icon: FileText, label: 'Confluence' },
-  { path: '/kanban', icon: Kanban, label: 'Kanban Board' },
+  { path: '/board', icon: Kanban, label: 'Jira Board' },
   { path: '/todos', icon: CheckSquare, label: 'My Todos' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];

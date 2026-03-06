@@ -118,34 +118,11 @@ export interface ConfluenceSpace {
   url: string;
 }
 
-// Kanban Types
-export interface KanbanColumn {
-  id: string;
-  title: string;
-  jiraStatusMapping?: string[]; // Map to Jira status names
-  order: number;
-}
-
-export interface KanbanCard {
-  id: string;
-  columnId: string;
-  content: string;
-  description?: string;
-  order: number;
-  linkedJiraIssue?: string; // Jira issue key
-  linkedConfluencePages?: string[]; // Confluence page IDs
-  dueDate?: string;
-  labels: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
 // Private Todo Types
 export interface TodoItem {
   id: string;
   content: string;
   completed: boolean;
-  linkedKanbanCard?: string; // Link to kanban card ID
   linkedJiraIssue?: string; // Jira issue key
   priority: 'low' | 'medium' | 'high';
   dueDate?: string;

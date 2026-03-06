@@ -4,7 +4,7 @@ import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard/Dashboard';
 import { Projects } from './pages/Projects/Projects';
 import { Confluence } from './pages/Confluence/Confluence';
-import { Kanban } from './pages/Kanban/Kanban';
+import { Board } from './pages/Board/Board';
 import { Todos } from './pages/Todos/Todos';
 import { Settings } from './pages/Settings/Settings';
 import './index.css';
@@ -27,7 +27,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="projects" element={<Projects />} />
             <Route path="confluence" element={<Confluence />} />
-            <Route path="kanban" element={<Kanban />} />
+            <Route path="board" element={<Board />} />
             <Route path="todos" element={<Todos />} />
             <Route path="settings" element={<Settings />} />
           </Route>

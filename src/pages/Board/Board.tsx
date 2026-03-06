@@ -1,0 +1,400 @@
+import { useState } from 'react';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, ExternalLink, Calendar, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
+import {
+  getProjects,
+  getMyIssues,
+  getIssues,
+  getTransitions,
+  transitionIssue,
+} from '../../services/jiraService';
+import { isConfigured, getJiraBaseUrl } from '../../services/api';
+import type { JiraIssue } from '../../types';
+import styles from './Board.module.css';
+
+const COLUMNS = [
+  { id: 'new', label: 'Å gjøre' },
+  { id: 'indeterminate', label: 'Pågår' },
+  { id: 'done', label: 'Ferdig' },
+] as const;
+
+type ColumnId = (typeof COLUMNS)[number]['id'];
+
+export function Board() {
+  const [mode, setMode] = useState<'mine' | 'project'>('mine');
+  const [selectedProjectKey, setSelectedProjectKey] = useState('');
+  const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
+  const configured = isConfigured();
+  const queryClient = useQueryClient();
+
+  const boardQueryKey = ['boardIssues', mode, selectedProjectKey] as const;
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: getProjects,
+    enabled: configured,
+  });
+
+  const { data: issues, isLoading, isError, refetch } = useQuery({
+    queryKey: boardQueryKey,
+    queryFn: () => (mode === 'mine' ? getMyIssues() : getIssues(selectedProjectKey)),
+    enabled: configured && (mode === 'mine' || !!selectedProjectKey),
+  });
+
+  const { data: transitions } = useQuery({
+    queryKey: ['transitions', selectedIssue?.key],
+    queryFn: () => getTransitions(selectedIssue!.key),
+    enabled: !!selectedIssue,
+  });
+
+  const { mutate: doTransition, isPending: changingStatus } = useMutation({
+    mutationFn: (vars: { transitionId: string; toStatusName: string; toCategoryKey: string }) =>
+      transitionIssue(selectedIssue!.key, vars.transitionId),
+    onSuccess: (_, vars) => {
+      const category = vars.toCategoryKey as 'new' | 'indeterminate' | 'done';
+      const updatedStatus = { id: selectedIssue!.status.id, name: vars.toStatusName, category };
+      // Oppdater cache og modal
+      queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
+        (old ?? []).map((issue) =>
+          issue.key === selectedIssue?.key ? { ...issue, status: updatedStatus } : issue
+        )
+      );
+      setSelectedIssue((prev) => (prev ? { ...prev, status: updatedStatus } : null));
+      queryClient.invalidateQueries({ queryKey: ['boardIssues'] });
+    },
+  });
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    const { draggableId: issueKey, source, destination } = result;
+    if (source.droppableId === destination.droppableId) return;
+
+    const targetCategory = destination.droppableId as ColumnId;
+    const previousData = queryClient.getQueryData<JiraIssue[]>(boardQueryKey);
+
+    // Optimistisk oppdatering direkte i query-cache
+    queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
+      (old ?? []).map((issue) =>
+        issue.key === issueKey
+          ? { ...issue, status: { ...issue.status, category: targetCategory } }
+          : issue
+      )
+    );
+
+    try {
+      const available = await getTransitions(issueKey);
+      const transition = available.find((t) => t.to.statusCategoryKey === targetCategory);
+      if (!transition) {
+        queryClient.setQueryData(boardQueryKey, previousData);
+        return;
+      }
+      await transitionIssue(issueKey, transition.id);
+      // Oppdater også statusnavn etter vellykket overgang
+      queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
+        (old ?? []).map((issue) =>
+          issue.key === issueKey
+            ? { ...issue, status: { ...issue.status, name: transition.to.name } }
+            : issue
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ['boardIssues'] });
+    } catch {
+      queryClient.setQueryData(boardQueryKey, previousData);
+    }
+  };
+
+  if (!configured) {
+    return (
+      <div className={styles.notConfigured}>
+        <AlertCircle size={48} />
+        <p>Vennligst konfigurer API-innstillingene dine for å bruke boardet.</p>
+        <Link to="/settings">Gå til innstillinger</Link>
+      </div>
+    );
+  }
+
+  let jiraBaseUrl = '';
+  try {
+    jiraBaseUrl = getJiraBaseUrl();
+  } catch {
+    // not configured
+  }
+
+  const getPriorityVariant = (priority?: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'highest':
+      case 'high':
+        return 'danger' as const;
+      case 'medium':
+        return 'warning' as const;
+      default:
+        return 'default' as const;
+    }
+  };
+
+  const isOverdue = (dueDate?: string) =>
+    dueDate ? new Date(dueDate) < new Date() : false;
+
+  const displayedIssues = issues ?? [];
+  const getColumnIssues = (columnId: ColumnId) =>
+    displayedIssues.filter((issue) => issue.status.category === columnId);
+
+  const renderCard = (issue: JiraIssue, index: number) => (
+    <Draggable key={issue.key} draggableId={issue.key} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          className={`${styles.card} ${snapshot.isDragging ? styles.dragging : ''}`}
+          onClick={() => setSelectedIssue(issue)}
+        >
+          <div className={styles.cardTop}>
+            <div className={styles.cardId}>
+              {issue.issueType.iconUrl && (
+                <img
+                  src={issue.issueType.iconUrl}
+                  alt={issue.issueType.name}
+                  className={styles.issueTypeIcon}
+                />
+              )}
+              <a
+                href={`${jiraBaseUrl}/browse/${issue.key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.issueKey}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {issue.key}
+              </a>
+            </div>
+            {issue.assignee &&
+              (issue.assignee.avatarUrl ? (
+                <img
+                  src={issue.assignee.avatarUrl}
+                  alt={issue.assignee.displayName}
+                  className={styles.assigneeAvatar}
+                  title={issue.assignee.displayName}
+                />
+              ) : (
+                <div
+                  className={styles.assigneeInitial}
+                  title={issue.assignee.displayName}
+                >
+                  {issue.assignee.displayName.charAt(0)}
+                </div>
+              ))}
+          </div>
+
+          <p className={styles.cardSummary}>{issue.summary}</p>
+
+          <div className={styles.cardFooter}>
+            {issue.priority && (
+              <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
+                {issue.priority.name}
+              </Badge>
+            )}
+            {issue.dueDate && (
+              <Badge variant={isOverdue(issue.dueDate) ? 'danger' : 'default'} size="sm">
+                <Calendar size={10} />
+                {new Date(issue.dueDate).toLocaleDateString('nb-NO')}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+    </Draggable>
+  );
+
+  return (
+    <div className={styles.container}>
+      {/* Kontroller */}
+      <div className={styles.header}>
+        <div className={styles.modeToggle}>
+          <button
+            className={`${styles.modeButton} ${mode === 'mine' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('mine')}
+          >
+            Mine saker
+          </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'project' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('project')}
+          >
+            Prosjekt
+          </button>
+        </div>
+
+        {mode === 'project' && (
+          <select
+            className={styles.projectSelect}
+            value={selectedProjectKey}
+            onChange={(e) => setSelectedProjectKey(e.target.value)}
+          >
+            <option value="">Velg prosjekt…</option>
+            {projects?.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <button className={styles.refreshButton} onClick={() => refetch()} title="Oppdater">
+          <RefreshCw size={16} />
+        </button>
+
+        <span className={styles.issueCount}>{displayedIssues.length} saker totalt</span>
+      </div>
+
+      {/* Feilmelding */}
+      {isError && (
+        <div className={styles.errorBanner}>
+          <AlertCircle size={16} />
+          Kunne ikke laste saker —{' '}
+          <Link to="/settings">sjekk API-innstillinger</Link>
+        </div>
+      )}
+
+      {/* Board */}
+      {isLoading ? (
+        <LoadingOverlay message="Laster saker…" />
+      ) : (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className={styles.board}>
+            {COLUMNS.map((column) => {
+              const columnIssues = getColumnIssues(column.id);
+              return (
+                <div key={column.id} className={styles.column}>
+                  <div className={styles.columnHeader}>
+                    <h3 className={styles.columnTitle}>{column.label}</h3>
+                    <span className={styles.columnCount}>{columnIssues.length}</span>
+                  </div>
+                  <Droppable droppableId={column.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`${styles.columnContent} ${
+                          snapshot.isDraggingOver ? styles.draggingOver : ''
+                        }`}
+                      >
+                        {columnIssues.length === 0 && !snapshot.isDraggingOver && (
+                          <p className={styles.emptyColumn}>Ingen saker</p>
+                        )}
+                        {columnIssues.map((issue, index) => renderCard(issue, index))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              );
+            })}
+          </div>
+        </DragDropContext>
+      )}
+
+      {/* Sak-detalj-modal */}
+      {selectedIssue && (
+        <Modal
+          isOpen={!!selectedIssue}
+          onClose={() => setSelectedIssue(null)}
+          title={selectedIssue.key}
+          size="md"
+        >
+          <div className={styles.modalContent}>
+            <h2 className={styles.modalTitle}>{selectedIssue.summary}</h2>
+
+            <div className={styles.modalMeta}>
+              <div className={styles.metaItem}>
+                <span className={styles.metaLabel}>Status</span>
+                <Badge
+                  variant={
+                    selectedIssue.status.category === 'done'
+                      ? 'success'
+                      : selectedIssue.status.category === 'indeterminate'
+                      ? 'primary'
+                      : 'default'
+                  }
+                >
+                  {selectedIssue.status.name}
+                </Badge>
+              </div>
+              {selectedIssue.priority && (
+                <div className={styles.metaItem}>
+                  <span className={styles.metaLabel}>Prioritet</span>
+                  <Badge variant={getPriorityVariant(selectedIssue.priority.name)}>
+                    {selectedIssue.priority.name}
+                  </Badge>
+                </div>
+              )}
+              {selectedIssue.assignee && (
+                <div className={styles.metaItem}>
+                  <span className={styles.metaLabel}>Ansvarlig</span>
+                  <span>{selectedIssue.assignee.displayName}</span>
+                </div>
+              )}
+              {selectedIssue.dueDate && (
+                <div className={styles.metaItem}>
+                  <span className={styles.metaLabel}>Frist</span>
+                  <span
+                    className={isOverdue(selectedIssue.dueDate) ? styles.overdue : ''}
+                  >
+                    {new Date(selectedIssue.dueDate).toLocaleDateString('nb-NO')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {selectedIssue.description && (
+              <div className={styles.modalDescription}>
+                <span className={styles.metaLabel}>Beskrivelse</span>
+                <p>{selectedIssue.description}</p>
+              </div>
+            )}
+
+            {transitions && transitions.length > 0 && (
+              <div className={styles.modalSection}>
+                <span className={styles.metaLabel}>Flytt til</span>
+                <div className={styles.transitionButtons}>
+                  {transitions.map((t) => (
+                    <Button
+                      key={t.id}
+                      size="sm"
+                      variant="secondary"
+                      disabled={changingStatus}
+                      onClick={() =>
+                        doTransition({
+                          transitionId: t.id,
+                          toStatusName: t.to.name,
+                          toCategoryKey: t.to.statusCategoryKey,
+                        })
+                      }
+                    >
+                      {t.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <a
+                href={`${jiraBaseUrl}/browse/${selectedIssue.key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.openInJiraBtn}
+              >
+                Åpne i Jira
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}

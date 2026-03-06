@@ -6,12 +6,12 @@ import {
   Link as LinkIcon,
   Calendar,
   Flag,
+  Edit2,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent, Button, Input, Modal, Badge } from '../../components/common';
 import { useTodoStore } from '../../store/todoStore';
-import { useKanbanStore } from '../../store/kanbanStore';
 import type { TodoItem } from '../../types';
 import styles from './Todos.module.css';
 
@@ -21,18 +21,14 @@ export function Todos() {
     updateTodo,
     deleteTodo,
     toggleTodo,
-    linkToKanbanCard,
     getActiveTodos,
     getCompletedTodos,
   } = useTodoStore();
-
-  const { cards } = useKanbanStore();
 
   const [newTodoContent, setNewTodoContent] = useState('');
   const [newTodoPriority, setNewTodoPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [linkingTodo, setLinkingTodo] = useState<string | null>(null);
 
   const activeTodos = getActiveTodos();
   const completedTodos = getCompletedTodos();
@@ -159,29 +155,16 @@ export function Todos() {
                           {todo.linkedJiraIssue}
                         </Badge>
                       )}
-                      {todo.linkedKanbanCard && (
-                        <Badge variant="info" size="sm">
-                          <LinkIcon size={10} />
-                          Kanban
-                        </Badge>
-                      )}
                     </div>
                   </div>
 
                   <div className={styles.todoActions}>
                     <button
                       className={styles.actionButton}
-                      onClick={() => setLinkingTodo(todo.id)}
-                      title="Link to Kanban card"
-                    >
-                      <LinkIcon size={16} />
-                    </button>
-                    <button
-                      className={styles.actionButton}
                       onClick={() => setEditingTodo(todo)}
-                      title="Edit"
+                      title="Rediger"
                     >
-                      <Flag size={16} />
+                      <Edit2 size={16} />
                     </button>
                     <button
                       className={`${styles.actionButton} ${styles.deleteAction}`}
@@ -318,54 +301,6 @@ export function Todos() {
         </Modal>
       )}
 
-      {/* Link to Kanban Card Modal */}
-      {linkingTodo && (
-        <Modal
-          isOpen={!!linkingTodo}
-          onClose={() => setLinkingTodo(null)}
-          title="Link to Kanban Card"
-          size="md"
-        >
-          <div className={styles.linkForm}>
-            <p className={styles.linkDescription}>
-              Select a Kanban card to link this todo to:
-            </p>
-
-            {cards.length === 0 ? (
-              <p className={styles.empty}>
-                No Kanban cards available. Create some cards first!
-              </p>
-            ) : (
-              <ul className={styles.cardList}>
-                {cards.map((card) => (
-                  <li key={card.id}>
-                    <button
-                      className={styles.cardOption}
-                      onClick={() => {
-                        linkToKanbanCard(linkingTodo, card.id);
-                        setLinkingTodo(null);
-                      }}
-                    >
-                      <span className={styles.cardTitle}>{card.content}</span>
-                      {card.linkedJiraIssue && (
-                        <Badge size="sm" variant="primary">
-                          {card.linkedJiraIssue}
-                        </Badge>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className={styles.linkActions}>
-              <Button variant="ghost" onClick={() => setLinkingTodo(null)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

@@ -253,13 +253,25 @@ export async function transitionIssue(issueKey: string, transitionId: string): P
   });
 }
 
-export async function getTransitions(issueKey: string): Promise<Array<{ id: string; name: string; to: { id: string; name: string } }>> {
+export async function getTransitions(issueKey: string): Promise<Array<{ id: string; name: string; to: { id: string; name: string; statusCategoryKey: string } }>> {
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
-  const response = await api.get<{ transitions: Array<{ id: string; name: string; to: { id: string; name: string } }> }>(
-    `${baseUrl}/rest/api/3/issue/${issueKey}/transitions`
-  );
-  return response.data.transitions;
+  const response = await api.get<{
+    transitions: Array<{
+      id: string;
+      name: string;
+      to: { id: string; name: string; statusCategory?: { key: string } };
+    }>;
+  }>(`${baseUrl}/rest/api/3/issue/${issueKey}/transitions`);
+  return response.data.transitions.map((t) => ({
+    id: t.id,
+    name: t.name,
+    to: {
+      id: t.to.id,
+      name: t.to.name,
+      statusCategoryKey: t.to.statusCategory?.key ?? 'indeterminate',
+    },
+  }));
 }
 
 export async function assignIssue(issueKey: string, accountId: string | null): Promise<void> {

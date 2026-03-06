@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { FolderKanban, FileText, CheckSquare, Clock, AlertCircle, ExternalLink, User, Eye, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Card, CardHeader, CardContent, Badge, LoadingOverlay } from '../../components/common';
+import { Card, CardHeader, CardContent, Badge } from '../../components/common';
 import { getProjects, getIssues, getMyIssues, getWatchedIssues, getFavoriteFilters, runFilter } from '../../services/jiraService';
 import { getRecentPages } from '../../services/confluenceService';
 import { useTodoStore } from '../../store/todoStore';
@@ -16,43 +16,43 @@ export function Dashboard() {
   const configured = isConfigured();
   const [selectedFilter, setSelectedFilter] = useState<JiraFilter | null>(null);
 
-  const { data: projects, isLoading: loadingProjects } = useQuery({
+  const { data: projects, isLoading: loadingProjects, isError: errorProjects } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
     enabled: configured,
   });
 
-  const { data: recentIssues, isLoading: loadingIssues } = useQuery({
+  const { data: recentIssues, isLoading: loadingIssues, isError: errorIssues } = useQuery({
     queryKey: ['recentIssues'],
     queryFn: () => getIssues(undefined, 'updated >= -7d ORDER BY updated DESC'),
     enabled: configured,
   });
 
-  const { data: myIssues, isLoading: loadingMyIssues } = useQuery({
+  const { data: myIssues, isLoading: loadingMyIssues, isError: errorMyIssues } = useQuery({
     queryKey: ['myIssues'],
     queryFn: getMyIssues,
     enabled: configured,
   });
 
-  const { data: watchedIssues, isLoading: loadingWatched } = useQuery({
+  const { data: watchedIssues, isLoading: loadingWatched, isError: errorWatched } = useQuery({
     queryKey: ['watchedIssues'],
     queryFn: getWatchedIssues,
     enabled: configured,
   });
 
-  const { data: favoriteFilters } = useQuery({
+  const { data: favoriteFilters, isError: errorFilters } = useQuery({
     queryKey: ['favoriteFilters'],
     queryFn: getFavoriteFilters,
     enabled: configured,
   });
 
-  const { data: filterResults, isLoading: loadingFilterResults } = useQuery({
+  const { data: filterResults, isLoading: loadingFilterResults, isError: errorFilterResults } = useQuery({
     queryKey: ['filterResults', selectedFilter?.id],
     queryFn: () => runFilter(selectedFilter!.id),
     enabled: !!selectedFilter,
   });
 
-  const { data: recentPages, isLoading: loadingPages } = useQuery({
+  const { data: recentPages, isLoading: loadingPages, isError: errorPages } = useQuery({
     queryKey: ['recentPages'],
     queryFn: () => getRecentPages(5),
     enabled: configured,
@@ -71,12 +71,6 @@ export function Dashboard() {
     );
   }
 
-  const isLoading = loadingProjects || loadingIssues || loadingPages || loadingMyIssues || loadingWatched;
-
-  if (isLoading) {
-    return <LoadingOverlay message="Loading dashboard..." />;
-  }
-
   let jiraBaseUrl = '';
   try {
     jiraBaseUrl = getJiraBaseUrl();
@@ -87,6 +81,13 @@ export function Dashboard() {
   const recentIssuesList = recentIssues?.slice(0, 5) || [];
   const myIssuesList = myIssues?.slice(0, 5) || [];
   const watchedIssuesList = watchedIssues?.slice(0, 5) || [];
+
+  const renderError = (message = 'Kunne ikke laste data') => (
+    <p className={styles.apiError}>
+      <AlertCircle size={14} />
+      {message} — <Link to="/settings">Sjekk API-innstillinger</Link>
+    </p>
+  );
 
   const renderIssueList = (issues: JiraIssue[], emptyMessage: string) => {
     if (issues.length === 0) {
@@ -127,8 +128,8 @@ export function Dashboard() {
                 <p className={styles.tooltipDescription}>{issue.description}</p>
                 {(issue.assignee || issue.dueDate) && (
                   <div className={styles.tooltipMeta}>
-                    {issue.assignee && <span>Assignee: {issue.assignee.displayName}</span>}
-                    {issue.dueDate && <span>Due: {new Date(issue.dueDate).toLocaleDateString()}</span>}
+                    {issue.assignee && <span>Ansvarlig: {issue.assignee.displayName}</span>}
+                    {issue.dueDate && <span>Frist: {new Date(issue.dueDate).toLocaleDateString('nb-NO')}</span>}
                   </div>
                 )}
               </div>
@@ -148,8 +149,8 @@ export function Dashboard() {
             <div className={styles.statIcon}>
               <FolderKanban size={24} />
             </div>
-            <div className={styles.statValue}>{projects?.length || 0}</div>
-            <div className={styles.statLabel}>Projects</div>
+            <div className={styles.statValue}>{loadingProjects ? '–' : errorProjects ? '!' : (projects?.length || 0)}</div>
+            <div className={styles.statLabel}>Prosjekter</div>
           </CardContent>
         </Card>
 
@@ -158,8 +159,8 @@ export function Dashboard() {
             <div className={styles.statIcon}>
               <User size={24} />
             </div>
-            <div className={styles.statValue}>{myIssues?.length || 0}</div>
-            <div className={styles.statLabel}>My Issues</div>
+            <div className={styles.statValue}>{loadingMyIssues ? '–' : (myIssues?.length || 0)}</div>
+            <div className={styles.statLabel}>Mine åpne saker</div>
           </CardContent>
         </Card>
 
@@ -168,8 +169,8 @@ export function Dashboard() {
             <div className={styles.statIcon}>
               <Eye size={24} />
             </div>
-            <div className={styles.statValue}>{watchedIssues?.length || 0}</div>
-            <div className={styles.statLabel}>Watched</div>
+            <div className={styles.statValue}>{loadingWatched ? '–' : (watchedIssues?.length || 0)}</div>
+            <div className={styles.statLabel}>Fulgte saker</div>
           </CardContent>
         </Card>
 
@@ -179,49 +180,57 @@ export function Dashboard() {
               <CheckSquare size={24} />
             </div>
             <div className={styles.statValue}>{activeTodos.length}</div>
-            <div className={styles.statLabel}>Active Todos</div>
+            <div className={styles.statLabel}>Aktive gjøremål</div>
           </CardContent>
         </Card>
       </div>
 
       <div className={styles.grid}>
-        {/* My Issues */}
+        {/* Mine saker */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3><User size={18} /> My Issues</h3>
-              <Link to="/projects" className={styles.viewAll}>
-                View all
+              <h3><User size={18} /> Mine åpne saker</h3>
+              <Link to="/projects?filter=mine" className={styles.viewAll}>
+                Se alle
               </Link>
             </div>
           </CardHeader>
           <CardContent>
-            {renderIssueList(myIssuesList, 'No issues assigned to you')}
+            {loadingMyIssues
+              ? <p className={styles.empty}>Laster...</p>
+              : errorMyIssues
+              ? renderError('Kunne ikke laste dine saker')
+              : renderIssueList(myIssuesList, 'Ingen saker tildelt deg')}
           </CardContent>
         </Card>
 
-        {/* Watched Issues */}
+        {/* Fulgte saker */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3><Eye size={18} /> Watched Issues</h3>
+              <h3><Eye size={18} /> Fulgte saker</h3>
             </div>
           </CardHeader>
           <CardContent>
-            {renderIssueList(watchedIssuesList, 'No watched issues')}
+            {loadingWatched
+              ? <p className={styles.empty}>Laster...</p>
+              : errorWatched
+              ? renderError('Kunne ikke laste fulgte saker')
+              : renderIssueList(watchedIssuesList, 'Ingen fulgte saker')}
           </CardContent>
         </Card>
 
-        {/* Favorite Filters */}
+        {/* Favorittfiltre */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3><Star size={18} /> Favorite Filters</h3>
+              <h3><Star size={18} /> Favorittfiltre</h3>
             </div>
           </CardHeader>
           <CardContent>
-            {!favoriteFilters || favoriteFilters.length === 0 ? (
-              <p className={styles.empty}>No favorite filters</p>
+            {errorFilters ? renderError('Kunne ikke laste filtre') : !favoriteFilters || favoriteFilters.length === 0 ? (
+              <p className={styles.empty}>Ingen favorittfiltre</p>
             ) : (
               <ul className={styles.filterList}>
                 {favoriteFilters.map((filter) => (
@@ -241,43 +250,53 @@ export function Dashboard() {
               <div className={styles.filterResults}>
                 <h4>{selectedFilter.name} Results</h4>
                 {loadingFilterResults ? (
-                  <p className={styles.empty}>Loading...</p>
+                  <p className={styles.empty}>Laster...</p>
+                ) : errorFilterResults ? (
+                  renderError('Kunne ikke kjøre filteret')
                 ) : (
-                  renderIssueList(filterResults?.slice(0, 5) || [], 'No issues match this filter')
+                  renderIssueList(filterResults?.slice(0, 5) || [], 'Ingen saker matcher filteret')
                 )}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Recent Issues */}
+        {/* Siste aktivitet */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3><Clock size={18} /> Recent Activity</h3>
+              <h3><Clock size={18} /> Siste aktivitet</h3>
               <Link to="/projects" className={styles.viewAll}>
-                View all
+                Se prosjekter
               </Link>
             </div>
           </CardHeader>
           <CardContent>
-            {renderIssueList(recentIssuesList, 'No recent issues')}
+            {loadingIssues
+              ? <p className={styles.empty}>Laster...</p>
+              : errorIssues
+              ? renderError('Kunne ikke laste siste aktivitet')
+              : renderIssueList(recentIssuesList, 'Ingen nylig aktivitet')}
           </CardContent>
         </Card>
 
-        {/* Recent Confluence Pages */}
+        {/* Siste Confluence-sider */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3>Recent Pages</h3>
+              <h3>Siste sider</h3>
               <Link to="/confluence" className={styles.viewAll}>
-                View all
+                Se alle
               </Link>
             </div>
           </CardHeader>
           <CardContent>
-            {recentPages?.length === 0 ? (
-              <p className={styles.empty}>No recent pages</p>
+            {loadingPages ? (
+              <p className={styles.empty}>Laster...</p>
+            ) : errorPages ? (
+              renderError('Kunne ikke laste Confluence-sider')
+            ) : recentPages?.length === 0 ? (
+              <p className={styles.empty}>Ingen sider nylig</p>
             ) : (
               <ul className={styles.pageList}>
                 {recentPages?.map((page) => (
@@ -301,19 +320,19 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* My Todos */}
+        {/* Mine gjøremål */}
         <Card>
           <CardHeader>
             <div className={styles.cardHeaderContent}>
-              <h3>My Todos</h3>
+              <h3>Mine gjøremål</h3>
               <Link to="/todos" className={styles.viewAll}>
-                View all
+                Se alle
               </Link>
             </div>
           </CardHeader>
           <CardContent>
             {activeTodos.length === 0 ? (
-              <p className={styles.empty}>No active todos</p>
+              <p className={styles.empty}>Ingen aktive gjøremål</p>
             ) : (
               <ul className={styles.todoList}>
                 {activeTodos.slice(0, 5).map((todo) => (

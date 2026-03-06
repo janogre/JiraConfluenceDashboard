@@ -8,11 +8,8 @@ interface TodoState {
   updateTodo: (id: string, updates: Partial<TodoItem>) => void;
   deleteTodo: (id: string) => void;
   toggleTodo: (id: string) => void;
-  linkToKanbanCard: (todoId: string, cardId: string) => void;
-  unlinkFromKanbanCard: (todoId: string) => void;
   linkToJiraIssue: (todoId: string, issueKey: string) => void;
   unlinkFromJiraIssue: (todoId: string) => void;
-  getTodosByKanbanCard: (cardId: string) => TodoItem[];
   getTodosByJiraIssue: (issueKey: string) => TodoItem[];
   getActiveTodos: () => TodoItem[];
   getCompletedTodos: () => TodoItem[];
@@ -66,24 +63,6 @@ export const useTodoStore = create<TodoState>()(
           ),
         })),
 
-      linkToKanbanCard: (todoId, cardId) =>
-        set((state) => ({
-          todos: state.todos.map((todo) =>
-            todo.id === todoId
-              ? { ...todo, linkedKanbanCard: cardId, updatedAt: new Date().toISOString() }
-              : todo
-          ),
-        })),
-
-      unlinkFromKanbanCard: (todoId) =>
-        set((state) => ({
-          todos: state.todos.map((todo) =>
-            todo.id === todoId
-              ? { ...todo, linkedKanbanCard: undefined, updatedAt: new Date().toISOString() }
-              : todo
-          ),
-        })),
-
       linkToJiraIssue: (todoId, issueKey) =>
         set((state) => ({
           todos: state.todos.map((todo) =>
@@ -101,10 +80,6 @@ export const useTodoStore = create<TodoState>()(
               : todo
           ),
         })),
-
-      getTodosByKanbanCard: (cardId) => {
-        return get().todos.filter((todo) => todo.linkedKanbanCard === cardId);
-      },
 
       getTodosByJiraIssue: (issueKey) => {
         return get().todos.filter((todo) => todo.linkedJiraIssue === issueKey);
