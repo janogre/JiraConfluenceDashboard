@@ -17,6 +17,8 @@ interface ConfluenceApiPage {
     when: string;
     by?: {
       displayName: string;
+      accountId?: string;
+      username?: string;
       profilePicture?: {
         path: string;
       };
@@ -65,6 +67,7 @@ function mapPage(apiPage: ConfluenceApiPage, baseUrl: string, fallbackSpaceKey?:
     lastModified: apiPage.version?.when || '',
     lastModifiedBy: apiPage.version?.by
       ? {
+          id: apiPage.version.by.accountId ?? apiPage.version.by.username,
           displayName: apiPage.version.by.displayName,
           avatarUrl: apiPage.version.by.profilePicture
             ? `${linkedBase}${apiPage.version.by.profilePicture.path}`
@@ -181,15 +184,49 @@ export async function searchPages(searchText: string, spaceKey?: string): Promis
   return response.data.results.map((page) => mapPage(page, linkedBase));
 }
 
-export async function getRecentPages(limit: number = 20): Promise<ConfluencePage[]> {
+export async function getRecentPages(limit: number = 20, spaceKey?: string): Promise<ConfluencePage[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
+
+  let cql = 'type=page';
+  if (spaceKey) {
+    cql += ` AND space = "${spaceKey}"`;
+  }
+  cql += ' ORDER BY lastModified DESC';
 
   const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
     `${baseUrl}/wiki/rest/api/content/search`,
     {
       params: {
-        cql: 'type=page ORDER BY lastModified DESC',
+        cql,
+        limit,
+        expand: 'space,version,body.excerpt',
+      },
+    }
+  );
+  const linkedBase = response.data._links?.base || baseUrl;
+  return response.data.results.map((page) => mapPage(page, linkedBase));
+}
+
+export async function getPagesByAuthor(
+  authorId: string,
+  spaceKey?: string,
+  limit = 30
+): Promise<ConfluencePage[]> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+
+  let cql = `type=page AND lastModifier = "${authorId}"`;
+  if (spaceKey) {
+    cql += ` AND space = "${spaceKey}"`;
+  }
+  cql += ' ORDER BY lastModified DESC';
+
+  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+    `${baseUrl}/wiki/rest/api/content/search`,
+    {
+      params: {
+        cql,
         limit,
         expand: 'space,version,body.excerpt',
       },

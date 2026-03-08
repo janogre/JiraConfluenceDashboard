@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Loader2,
   Star,
+  User,
 } from 'lucide-react';
 import { Card, CardContent, Input, LoadingOverlay } from '../../components/common';
 import {
@@ -18,6 +19,8 @@ import {
   getChildPages,
   getSpaceHomePage,
   searchPages,
+  getRecentPages,
+  getPagesByAuthor,
 } from '../../services/confluenceService';
 import { isConfigured } from '../../services/api';
 import type { ConfluencePage, ConfluenceSpace } from '../../types';
@@ -110,6 +113,11 @@ export function Confluence() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [spaceSearch, setSpaceSearch] = useState('');
   const [starredKeys, setStarredKeys] = useState<Set<string>>(loadStarred);
+  const [treeSearch, setTreeSearch] = useState('');
+  const [debouncedTreeSearch, setDebouncedTreeSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'pages' | 'recent' | 'author'>('pages');
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
+  const [authorSearch, setAuthorSearch] = useState('');
   const configured = isConfigured();
 
   const handleSearchChange = (value: string) => {
@@ -117,6 +125,13 @@ export function Confluence() {
     setTimeout(() => {
       setDebouncedSearch(value);
     }, 300);
+  };
+
+  const handleTreeSearchChange = (value: string) => {
+    setTreeSearch(value);
+    setTimeout(() => {
+      setDebouncedTreeSearch(value);
+    }, 250);
   };
 
   const toggleStar = (e: React.MouseEvent, spaceKey: string) => {
@@ -133,6 +148,12 @@ export function Confluence() {
     });
   };
 
+  // Reset author state when selected space changes
+  useEffect(() => {
+    setSelectedAuthorId(null);
+    setAuthorSearch('');
+  }, [selectedSpace]);
+
   const { data: spaces, isLoading: loadingSpaces } = useQuery({
     queryKey: ['confluenceSpaces'],
     queryFn: getSpaces,
@@ -144,7 +165,7 @@ export function Confluence() {
   const { data: homePage, isLoading: loadingHomePage } = useQuery({
     queryKey: ['confluenceHomePage', selectedSpace?.key],
     queryFn: () => getSpaceHomePage(selectedSpace!.key),
-    enabled: configured && !!selectedSpace && !isSearching,
+    enabled: configured && !!selectedSpace && !isSearching && activeTab === 'pages',
   });
 
   const { data: searchResults, isLoading: loadingSearch } = useQuery({
@@ -152,6 +173,50 @@ export function Confluence() {
     queryFn: () => searchPages(debouncedSearch, selectedSpace?.key),
     enabled: configured && isSearching,
   });
+
+  const isTreeSearching = debouncedTreeSearch.length >= 2;
+
+  const { data: treeSearchResults, isLoading: loadingTreeSearch } = useQuery({
+    queryKey: ['confluenceTreeSearch', debouncedTreeSearch, selectedSpace?.key],
+    queryFn: () => searchPages(debouncedTreeSearch, selectedSpace?.key),
+    enabled: configured && !!selectedSpace && isTreeSearching && !isSearching && activeTab === 'pages',
+  });
+
+  const { data: recentPages, isLoading: loadingRecent } = useQuery({
+    queryKey: ['confluenceRecent', selectedSpace?.key],
+    queryFn: () => getRecentPages(30, selectedSpace?.key ?? undefined),
+    enabled: configured && activeTab === 'recent' && !isSearching,
+  });
+
+  const { data: authorPoolPages } = useQuery({
+    queryKey: ['confluenceAuthorPool', selectedSpace?.key],
+    queryFn: () => getRecentPages(50, selectedSpace?.key ?? undefined),
+    enabled: configured && activeTab === 'author' && !isSearching,
+  });
+
+  const { data: authorPages, isLoading: loadingAuthorPages } = useQuery({
+    queryKey: ['confluenceAuthorPages', selectedAuthorId, selectedSpace?.key],
+    queryFn: () => getPagesByAuthor(selectedAuthorId!, selectedSpace?.key ?? undefined),
+    enabled: configured && !!selectedAuthorId && activeTab === 'author' && !isSearching,
+  });
+
+  const uniqueAuthors = useMemo(() => {
+    if (!authorPoolPages) return [];
+    const seen = new Map<string, { id: string; displayName: string; avatarUrl?: string }>();
+    authorPoolPages.forEach((p) => {
+      if (p.lastModifiedBy?.id && !seen.has(p.lastModifiedBy.id)) {
+        seen.set(p.lastModifiedBy.id, {
+          id: p.lastModifiedBy.id,
+          displayName: p.lastModifiedBy.displayName,
+          avatarUrl: p.lastModifiedBy.avatarUrl,
+        });
+      }
+    });
+    const all = [...seen.values()];
+    if (!authorSearch.trim()) return all;
+    const q = authorSearch.toLowerCase();
+    return all.filter((a) => a.displayName.toLowerCase().includes(q));
+  }, [authorPoolPages, authorSearch]);
 
   const visibleSpaces = useMemo(() => {
     if (!spaces) return [];
@@ -178,6 +243,19 @@ export function Confluence() {
 
   const isLoadingContent = loadingHomePage || loadingSearch;
 
+  const highlightMatch = (text: string, query: string) => {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className={styles.matchHighlight}>{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  };
+
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('nb-NO', {
@@ -185,6 +263,13 @@ export function Confluence() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const getPagesHeaderTitle = () => {
+    if (isSearching) return `Søkeresultater (${searchResults?.length || 0})`;
+    if (activeTab === 'recent') return selectedSpace ? `Nylig endret i ${selectedSpace.name}` : 'Nylig endrede sider';
+    if (activeTab === 'author') return selectedSpace ? `Forfattere i ${selectedSpace.name}` : 'Forfattere';
+    return selectedSpace ? selectedSpace.name : 'Velg et område';
   };
 
   return (
@@ -225,7 +310,7 @@ export function Confluence() {
               <Card
                 key={space.key}
                 hoverable
-                onClick={() => setSelectedSpace(space)}
+                onClick={() => { setSelectedSpace(space); setTreeSearch(''); setDebouncedTreeSearch(''); }}
                 className={`${styles.spaceCard} ${selectedSpace?.key === space.key ? styles.selected : ''}`}
               >
                 <CardContent className={styles.spaceContent}>
@@ -252,13 +337,7 @@ export function Confluence() {
         {/* Pages / Tree View */}
         <div className={styles.pagesList}>
           <div className={styles.pagesHeader}>
-            <h3 className={styles.sectionTitle}>
-              {isSearching
-                ? `Søkeresultater (${searchResults?.length || 0})`
-                : selectedSpace
-                ? selectedSpace.name
-                : 'Velg et område'}
-            </h3>
+            <h3 className={styles.sectionTitle}>{getPagesHeaderTitle()}</h3>
             {selectedSpace && (
               <a
                 href={selectedSpace.url}
@@ -272,67 +351,289 @@ export function Confluence() {
             )}
           </div>
 
-          {isLoadingContent ? (
-            <LoadingOverlay message="Laster inn..." />
-          ) : !selectedSpace && !isSearching ? (
-            <div className={styles.emptyState}>
-              <FileText size={48} />
-              <p>Velg et område for å se sidestrukturen</p>
+          {!isSearching && (
+            <div className={styles.tabsBar}>
+              <button
+                className={`${styles.tab} ${activeTab === 'pages' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('pages')}
+              >
+                Sider
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'recent' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('recent')}
+              >
+                Nylig endret
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'author' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('author')}
+              >
+                Etter forfatter
+              </button>
             </div>
-          ) : isSearching ? (
-            searchResults?.length === 0 ? (
-              <div className={styles.emptyState}>
-                <FileText size={48} />
-                <p>Ingen sider funnet</p>
-              </div>
-            ) : (
-              <div className={styles.pagesGrid}>
-                {searchResults?.map((page) => (
-                  <Card key={page.id} hoverable className={styles.pageCard}>
-                    <CardContent>
-                      <div className={styles.pageHeader}>
-                        <FileText size={20} className={styles.pageIcon} />
-                        <div className={styles.pageInfo}>
-                          <h4 className={styles.pageTitle}>{page.title}</h4>
-                          {page.spaceName && (
-                            <span className={styles.pageSpace}>{page.spaceName}</span>
+          )}
+
+          {/* Tab: Sider */}
+          {(isSearching || activeTab === 'pages') && (
+            <>
+              {selectedSpace && !isSearching && (
+                <div className={styles.treeSearchWrapper}>
+                  <Input
+                    placeholder={`Søk i ${selectedSpace.name}…`}
+                    value={treeSearch}
+                    onChange={(e) => handleTreeSearchChange(e.target.value)}
+                    icon={<Search size={15} />}
+                  />
+                </div>
+              )}
+
+              {isLoadingContent || loadingTreeSearch ? (
+                <LoadingOverlay message="Laster inn..." />
+              ) : !selectedSpace && !isSearching ? (
+                <div className={styles.emptyState}>
+                  <FileText size={48} />
+                  <p>Velg et område for å se sidestrukturen</p>
+                </div>
+              ) : isSearching ? (
+                searchResults?.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <FileText size={48} />
+                    <p>Ingen sider funnet</p>
+                  </div>
+                ) : (
+                  <div className={styles.pagesGrid}>
+                    {searchResults?.map((page) => (
+                      <Card key={page.id} hoverable className={styles.pageCard}>
+                        <CardContent>
+                          <div className={styles.pageHeader}>
+                            <FileText size={20} className={styles.pageIcon} />
+                            <div className={styles.pageInfo}>
+                              <h4 className={styles.pageTitle}>{page.title}</h4>
+                              {page.spaceName && (
+                                <span className={styles.pageSpace}>{page.spaceName}</span>
+                              )}
+                            </div>
+                            <a
+                              href={page.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.pageLink}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink size={16} />
+                            </a>
+                          </div>
+                          {page.excerpt && (
+                            <p className={styles.pageExcerpt}>{page.excerpt}</p>
                           )}
-                        </div>
+                          <div className={styles.pageMeta}>
+                            {page.lastModified && (
+                              <div className={styles.metaItem}>
+                                <Clock size={14} />
+                                <span>{formatDate(page.lastModified)}</span>
+                              </div>
+                            )}
+                            {page.lastModifiedBy && (
+                              <div className={styles.metaItem}>
+                                <span>av {page.lastModifiedBy.displayName}</span>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )
+              ) : isTreeSearching && selectedSpace ? (
+                treeSearchResults?.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <Search size={36} />
+                    <p>Ingen sider funnet for «{treeSearch}»</p>
+                  </div>
+                ) : (
+                  <div className={styles.treeSearchResults}>
+                    {treeSearchResults?.map((page) => (
+                      <div key={page.id} className={styles.treeSearchRow}>
+                        <FileText size={14} className={styles.treePageIcon} />
                         <a
                           href={page.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={styles.pageLink}
-                          onClick={(e) => e.stopPropagation()}
+                          className={styles.treeSearchTitle}
                         >
-                          <ExternalLink size={16} />
+                          {highlightMatch(page.title, debouncedTreeSearch)}
+                        </a>
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.treePageLink}
+                          title="Åpne i Confluence"
+                        >
+                          <ExternalLink size={12} />
                         </a>
                       </div>
-                      {page.excerpt && (
-                        <p className={styles.pageExcerpt}>{page.excerpt}</p>
-                      )}
-                      <div className={styles.pageMeta}>
-                        {page.lastModified && (
-                          <div className={styles.metaItem}>
-                            <Clock size={14} />
-                            <span>{formatDate(page.lastModified)}</span>
-                          </div>
-                        )}
-                        {page.lastModifiedBy && (
-                          <div className={styles.metaItem}>
-                            <span>av {page.lastModifiedBy.displayName}</span>
-                          </div>
-                        )}
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className={styles.treeView}>
+                  {homePage && <PageTreeNode page={homePage} />}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Tab: Nylig endret */}
+          {!isSearching && activeTab === 'recent' && (
+            <>
+              {loadingRecent ? (
+                <LoadingOverlay message="Laster inn..." />
+              ) : !recentPages || recentPages.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <Clock size={48} />
+                  <p>Ingen nylig endrede sider funnet</p>
+                </div>
+              ) : (
+                <div className={styles.recentFeed}>
+                  {recentPages.map((page) => (
+                    <div key={page.id} className={styles.recentFeedItem}>
+                      <FileText size={15} className={styles.treePageIcon} />
+                      <div className={styles.recentItemContent}>
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.recentItemTitle}
+                        >
+                          {page.title}
+                        </a>
+                        <div className={styles.recentItemMeta}>
+                          {page.spaceName && <span>{page.spaceName}</span>}
+                          {page.spaceName && page.lastModified && <span>·</span>}
+                          {page.lastModified && (
+                            <span>
+                              <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                              {formatDate(page.lastModified)}
+                            </span>
+                          )}
+                          {page.lastModifiedBy && (
+                            <>
+                              <span>·</span>
+                              <span>{page.lastModifiedBy.displayName}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <a
+                        href={page.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.treePageLink}
+                        title="Åpne i Confluence"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Tab: Etter forfatter */}
+          {!isSearching && activeTab === 'author' && (
+            <div className={styles.authorLayout}>
+              <div className={styles.authorListPanel}>
+                <div className={styles.authorSearch}>
+                  <Input
+                    placeholder="Søk forfatter..."
+                    value={authorSearch}
+                    onChange={(e) => setAuthorSearch(e.target.value)}
+                    icon={<Search size={13} />}
+                  />
+                </div>
+                <div className={styles.authorList}>
+                  {!authorPoolPages ? (
+                    <div className={styles.authorLoading}>
+                      <Loader2 size={16} className={styles.treeSpinner} />
+                    </div>
+                  ) : uniqueAuthors.length === 0 ? (
+                    <div className={styles.authorEmpty}>Ingen forfattere funnet</div>
+                  ) : (
+                    uniqueAuthors.map((author) => (
+                      <button
+                        key={author.id}
+                        className={`${styles.authorItem} ${selectedAuthorId === author.id ? styles.authorItemActive : ''}`}
+                        onClick={() => setSelectedAuthorId(author.id)}
+                      >
+                        {author.avatarUrl ? (
+                          <img src={author.avatarUrl} alt={author.displayName} className={styles.authorAvatar} />
+                        ) : (
+                          <span className={styles.authorInitial}>
+                            {author.displayName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span className={styles.authorName}>{author.displayName}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-            )
-          ) : (
-            // Tree view
-            <div className={styles.treeView}>
-              {homePage && <PageTreeNode page={homePage} />}
+
+              <div className={styles.authorPages}>
+                {!selectedAuthorId ? (
+                  <div className={styles.emptyState}>
+                    <User size={36} />
+                    <p>Velg en forfatter for å se deres sider</p>
+                  </div>
+                ) : loadingAuthorPages ? (
+                  <LoadingOverlay message="Laster inn sider..." />
+                ) : !authorPages || authorPages.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <FileText size={36} />
+                    <p>Ingen sider funnet for denne forfatteren</p>
+                  </div>
+                ) : (
+                  authorPages.map((page) => (
+                    <div key={page.id} className={styles.recentFeedItem}>
+                      <FileText size={15} className={styles.treePageIcon} />
+                      <div className={styles.recentItemContent}>
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.recentItemTitle}
+                        >
+                          {page.title}
+                        </a>
+                        <div className={styles.recentItemMeta}>
+                          {page.spaceName && <span>{page.spaceName}</span>}
+                          {page.lastModified && (
+                            <>
+                              <span>·</span>
+                              <span>
+                                <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                                {formatDate(page.lastModified)}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <a
+                        href={page.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.treePageLink}
+                        title="Åpne i Confluence"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>

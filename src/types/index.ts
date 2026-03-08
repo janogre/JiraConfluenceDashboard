@@ -111,6 +111,7 @@ export interface ConfluencePage {
   url: string;
   lastModified: string;
   lastModifiedBy?: {
+    id?: string;
     displayName: string;
     avatarUrl?: string;
   };

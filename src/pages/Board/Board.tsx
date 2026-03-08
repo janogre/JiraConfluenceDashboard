@@ -48,6 +48,7 @@ export function Board() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [sortByDueDate, setSortByDueDate] = useState(false);
+  const [timelineShowDone, setTimelineShowDone] = useState(false);
 
   const toggleStarProject = (key: string) => {
     setStarredProjects((prev) => {
@@ -218,6 +219,14 @@ export function Board() {
     return result;
   };
 
+  // Timeline filtering: default hides done issues; priority/assignee filters also apply
+  const timelineIssues = displayedIssues.filter((issue) => {
+    if (!timelineShowDone && issue.status.category === 'done') return false;
+    if (filterPriority && issue.priority?.name !== filterPriority) return false;
+    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    return true;
+  });
+
   const renderCard = (issue: JiraIssue, index: number) => (
     <Draggable key={issue.key} draggableId={issue.key} index={index}>
       {(provided, snapshot) => (
@@ -353,7 +362,7 @@ export function Board() {
           </div>
         )}
 
-        {displayedIssues.length > 0 && mode !== 'timeline' && (
+        {displayedIssues.length > 0 && (
           <div className={styles.filters}>
             <select
               className={styles.filterSelect}
@@ -379,19 +388,32 @@ export function Board() {
               ))}
             </select>
 
-            <button
-              className={`${styles.sortButton} ${sortByDueDate ? styles.sortButtonActive : ''}`}
-              onClick={() => setSortByDueDate((v) => !v)}
-              title="Sorter etter forfallsdato"
-            >
-              <ArrowUpDown size={14} />
-              Forfallsdato
-            </button>
+            {mode !== 'timeline' && (
+              <button
+                className={`${styles.sortButton} ${sortByDueDate ? styles.sortButtonActive : ''}`}
+                onClick={() => setSortByDueDate((v) => !v)}
+                title="Sorter etter forfallsdato"
+              >
+                <ArrowUpDown size={14} />
+                Forfallsdato
+              </button>
+            )}
 
-            {(filterPriority || filterAssignee || sortByDueDate) && (
+            {mode === 'timeline' && (
+              <button
+                className={`${styles.sortButton} ${timelineShowDone ? styles.sortButtonActive : ''}`}
+                onClick={() => setTimelineShowDone((v) => !v)}
+                title={timelineShowDone ? 'Skjul ferdige saker' : 'Vis ferdige saker'}
+              >
+                {timelineShowDone ? <EyeOff size={14} /> : <Eye size={14} />}
+                Vis ferdige
+              </button>
+            )}
+
+            {(filterPriority || filterAssignee || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setSortByDueDate(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setSortByDueDate(false); setTimelineShowDone(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />
@@ -420,7 +442,7 @@ export function Board() {
       {isLoading ? (
         <LoadingOverlay message="Laster saker…" />
       ) : mode === 'timeline' && selectedProjectKey ? (
-        <Timeline issues={issues ?? []} jiraBaseUrl={jiraBaseUrl} />
+        <Timeline issues={timelineIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
           <div className={styles.board}>
