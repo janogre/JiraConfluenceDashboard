@@ -54,7 +54,7 @@ export function Dashboard() {
 
   if (!configured) {
     return (
-      <div className={`${styles.notConfigured} ${styles.neasTheme}`}>
+      <div className={styles.notConfigured}>
         <AlertCircle size={48} />
         <h2>API Not Configured</h2>
         <p>Please configure your Jira/Confluence credentials to get started.</p>
@@ -134,7 +134,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className={`${styles.dashboard} ${styles.neasTheme}`}>
+    <div className={styles.dashboard}>
       {/* Stats */}
       <div className={styles.stats}>
         <Card className={styles.statCard}>

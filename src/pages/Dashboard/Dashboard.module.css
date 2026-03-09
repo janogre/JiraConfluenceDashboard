@@ -1,106 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-
-/* ─── NEAS Energi Telekom – Dashboard Theme ─────────────────────────────────
-   Scoped overrides via CSS custom properties so every child component
-   (Card, Badge, ActivityChart, TeamWorkload) inherits the NEAS palette
-   without touching global styles or other pages.
-   ────────────────────────────────────────────────────────────────────────── */
-.neasTheme {
-  /* Action / link colour: deep forest green (AA contrast on white) */
-  --color-primary:        #1e7a4a;
-  --color-primary-hover:  #155c37;
-
-  /* Semantic */
-  --color-secondary:      #526f67;
-  --color-success:        #2e8b4a;
-  --color-warning:        #ffa65a;   /* NEAS orange */
-  --color-danger:         #d94f4f;
-  --color-info:           #4a8070;
-
-  /* Backgrounds – sage-white palette from neas.no */
-  --color-bg-primary:     #ffffff;
-  --color-bg-secondary:   #f1f6f5;   /* NEAS light-grey/sage */
-  --color-bg-tertiary:    #e3eeea;
-  --color-bg-hover:       #d4e9e1;
-
-  /* Text – NEAS uses deep forest green as body text */
-  --color-text-primary:   #0d3a2d;
-  --color-text-secondary: #3b5e55;
-  --color-text-muted:     #7a9890;
-
-  /* Border */
-  --color-border:         #c3d9d2;
-  --color-border-focus:   #1e7a4a;
-
-  /* Shadows – green-tinted */
-  --shadow-sm: 0 1px 3px  rgba(13, 58, 45, 0.07);
-  --shadow-md: 0 4px 12px rgba(13, 58, 45, 0.10);
-  --shadow-lg: 0 8px 24px rgba(13, 58, 45, 0.14);
-
-  /* Slightly larger radii to match NEAS's rounded style */
-  --radius-sm:  4px;
-  --radius-md:  8px;
-  --radius-lg: 12px;
-
-  /* NEAS-adjacent font (Outfit – clean, rounded, Scandinavian feel) */
-  --font-family: 'Outfit', system-ui, -apple-system, sans-serif;
-
-  /* Apply the font on the wrapper itself so children inherit it */
-  font-family: var(--font-family);
-}
-
-/* Stat icon: light NEAS-green background with the action-green icon */
-.neasTheme .statIcon {
-  background: #e2f5ea;
-  color: #1e7a4a;
-}
-
-/* Stat value number: strong forest green */
-.neasTheme .statValue {
-  color: #0d3a2d;
-}
-
-/* Workload avatars / initials */
-.neasTheme .workloadInitial {
-  background: #1e7a4a;
-  color: #ffffff;
-}
-
-/* Workload bar: use NEAS grass-green for the fill */
-.neasTheme .workloadBar {
+/* Workload bar: NEAS grass-green gradient */
+.workloadBar {
   background: linear-gradient(90deg, #1e7a4a 0%, #95c672 100%);
 }
 
-/* Project chips – rounder to match NEAS pill style */
-.neasTheme .projectChip {
-  border-radius: 999px;
+/* API error strip: warm-green tint */
+.apiError {
+  background: #f0faf3 !important;
+  border-color: #b6dfc4 !important;
+  color: #1e5c37 !important;
 }
 
-/* Active filter buttons */
-.neasTheme .filterButton.filterActive {
-  background: #1e7a4a;
-  border-color: #1e7a4a;
+.apiError a {
+  color: #1e5c37 !important;
 }
 
 /* Configure link button */
-.neasTheme .configureLink {
-  background: #1e7a4a;
+.configureLink {
   border-radius: 999px;
-  padding: var(--spacing-sm) var(--spacing-xl);
 }
-
-.neasTheme .configureLink:hover {
-  background: #155c37;
-}
-
-/* API error strip: warm-green tint instead of red */
-.neasTheme .apiError {
-  background: #f0faf3;
-  border-color: #b6dfc4;
-  color: #1e5c37;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────── */
 
 .dashboard {
   display: flex;

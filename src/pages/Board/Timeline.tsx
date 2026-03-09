@@ -29,9 +29,6 @@ function getMonthsBetween(start: Date, end: Date): Date[] {
   return months;
 }
 
-function daysInRange(start: Date, end: Date): number {
-  return Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -70,7 +67,8 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
   const windowStart = startOfMonth(addMonths(today, -2 + windowOffset));
   const windowEnd = startOfMonth(addMonths(today, 5 + windowOffset));
   const windowEndExclusive = addMonths(windowEnd, 1);
-  const windowDays = daysInRange(windowStart, windowEndExclusive);
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const windowDays = (windowEndExclusive.getTime() - windowStart.getTime()) / MS_PER_DAY;
 
   const months = getMonthsBetween(windowStart, windowEnd);
   const monthWidthPct = 100 / months.length;
@@ -141,7 +139,8 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
     });
   }
 
-  // Bar calculation
+  // Bar calculation — left and right positions calculated independently from windowStart
+  // so that issues created before the visible window don't inflate bar width.
   function getBar(issue: JiraIssue): { left: number; width: number } | null {
     const startStr = issue.startDate ?? issue.created;
     const endStr = issue.dueDate;
@@ -149,17 +148,18 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
     const start = new Date(startStr);
     const end = new Date(endStr);
     if (end <= start) return null;
-    const leftDays = daysInRange(windowStart, start);
-    const barDays = daysInRange(start, end);
-    const leftPct = (leftDays / windowDays) * 100;
-    const widthPct = (barDays / windowDays) * 100;
+    const startOffset = (start.getTime() - windowStart.getTime()) / MS_PER_DAY;
+    const endOffset = (end.getTime() - windowStart.getTime()) / MS_PER_DAY;
+    const leftPct = (startOffset / windowDays) * 100;
+    const rightPct = (endOffset / windowDays) * 100;
     const clampedLeft = clamp(leftPct, 0, 100);
-    const clampedWidth = clamp(widthPct, 0, 100 - clampedLeft);
+    const clampedRight = clamp(rightPct, 0, 100);
+    const clampedWidth = clampedRight - clampedLeft;
     if (clampedWidth < 0.2) return null;
     return { left: clampedLeft, width: clampedWidth };
   }
 
-  const todayLeft = (daysInRange(windowStart, today) / windowDays) * 100;
+  const todayLeft = ((today.getTime() - windowStart.getTime()) / MS_PER_DAY / windowDays) * 100;
   const showTodayLine = todayLeft >= 0 && todayLeft <= 100;
 
   // Total content height for bars area (section header + rows)
