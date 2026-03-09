@@ -40,7 +40,7 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
 export function Board() {
-  const [mode, setMode] = useState<'mine' | 'project' | 'timeline'>('mine');
+  const [mode, setMode] = useState<'mine' | 'project' | 'timeline' | 'activity'>('mine');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
@@ -73,7 +73,7 @@ export function Board() {
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
     queryFn: () => (mode === 'mine' ? getMyIssues() : getIssues(selectedProjectKey)),
-    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline'))),
+    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline' || mode === 'activity'))),
   });
 
   const { data: transitions } = useQuery({
@@ -227,6 +227,27 @@ export function Board() {
     return true;
   });
 
+  const relativeTime = (dateString: string): string => {
+    const diff = Date.now() - new Date(dateString).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'akkurat nå';
+    if (minutes < 60) return `${minutes} min siden`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} t siden`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'i går';
+    if (days < 7) return `${days} dager siden`;
+    return new Date(dateString).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+  };
+
+  const activityIssues = [...displayedIssues]
+    .filter((issue) => {
+      if (filterPriority && issue.priority?.name !== filterPriority) return false;
+      if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
+
   const renderCard = (issue: JiraIssue, index: number) => (
     <Draggable key={issue.key} draggableId={issue.key} index={index}>
       {(provided, snapshot) => (
@@ -318,6 +339,14 @@ export function Board() {
             title={!selectedProjectKey ? 'Velg et prosjekt for å bruke tidslinje' : 'Vis tidslinje'}
           >
             Tidslinje
+          </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'activity' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('activity')}
+            disabled={!selectedProjectKey}
+            title={!selectedProjectKey ? 'Velg et prosjekt for å se aktivitetsfeed' : 'Vis aktivitetsfeed'}
+          >
+            Aktivitet
           </button>
         </div>
 
@@ -443,6 +472,83 @@ export function Board() {
         <LoadingOverlay message="Laster saker…" />
       ) : mode === 'timeline' && selectedProjectKey ? (
         <Timeline issues={timelineIssues} jiraBaseUrl={jiraBaseUrl} />
+      ) : mode === 'activity' && selectedProjectKey ? (
+        <div className={styles.activityFeed}>
+          {activityIssues.length === 0 ? (
+            <p className={styles.emptyColumn}>Ingen saker funnet</p>
+          ) : (
+            activityIssues.map((issue) => (
+              <div
+                key={issue.key}
+                className={styles.activityItem}
+                onClick={() => setSelectedIssue(issue)}
+              >
+                <span
+                  className={`${styles.activityDot} ${
+                    issue.status.category === 'done'
+                      ? styles.activityDotDone
+                      : issue.status.category === 'indeterminate'
+                      ? styles.activityDotActive
+                      : styles.activityDotNew
+                  }`}
+                />
+                <div className={styles.activityMain}>
+                  <div className={styles.activityTop}>
+                    {issue.issueType.iconUrl && (
+                      <img
+                        src={issue.issueType.iconUrl}
+                        alt={issue.issueType.name}
+                        className={styles.issueTypeIcon}
+                      />
+                    )}
+                    <a
+                      href={`${jiraBaseUrl}/browse/${issue.key}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.issueKey}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {issue.key}
+                    </a>
+                    <span className={styles.activitySummary}>{issue.summary}</span>
+                  </div>
+                  <div className={styles.activityMeta}>
+                    <Badge
+                      variant={
+                        issue.status.category === 'done'
+                          ? 'success'
+                          : issue.status.category === 'indeterminate'
+                          ? 'primary'
+                          : 'default'
+                      }
+                      size="sm"
+                    >
+                      {issue.status.name}
+                    </Badge>
+                    {issue.assignee && (
+                      issue.assignee.avatarUrl ? (
+                        <img
+                          src={issue.assignee.avatarUrl}
+                          alt={issue.assignee.displayName}
+                          className={styles.activityAvatar}
+                          title={issue.assignee.displayName}
+                        />
+                      ) : (
+                        <span
+                          className={styles.assigneeInitial}
+                          title={issue.assignee.displayName}
+                        >
+                          {issue.assignee.displayName.charAt(0)}
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+                <span className={styles.activityTime}>{relativeTime(issue.updated)}</span>
+              </div>
+            ))
+          )}
+        </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
           <div className={styles.board}>

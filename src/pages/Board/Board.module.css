@@ -484,3 +484,90 @@
   color: var(--color-danger);
   font-weight: 600;
 }
+
+/* Activity feed */
+.activityFeed {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.activityItem:last-child {
+  border-bottom: none;
+}
+
+.activityItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.activityDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activityDotNew        { background: var(--color-text-muted); }
+.activityDotActive     { background: var(--color-primary); }
+.activityDotDone       { background: var(--color-success); }
+
+.activityMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activityTop {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.activitySummary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.activityMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.activityAvatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.activityTime {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: right;
+}
