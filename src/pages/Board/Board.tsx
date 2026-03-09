@@ -73,7 +73,10 @@ export function Board() {
 
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
-    queryFn: () => (mode === 'mine' ? getMyIssues() : getIssues(selectedProjectKey)),
+    queryFn: () =>
+      mode === 'mine'
+        ? getMyIssues()
+        : getIssues(selectedProjectKey, undefined, mode === 'timeline' || mode === 'pulse'),
     enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline' || mode === 'activity' || mode === 'pulse'))),
   });
 
@@ -223,6 +226,13 @@ export function Board() {
   // Timeline filtering: default hides done issues; priority/assignee filters also apply
   const timelineIssues = displayedIssues.filter((issue) => {
     if (!timelineShowDone && issue.status.category === 'done') return false;
+    if (filterPriority && issue.priority?.name !== filterPriority) return false;
+    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    return true;
+  });
+
+  // Pulse filtering: priority/assignee filters apply; category filtering handled inside ProjectPulse
+  const pulseIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     return true;
@@ -480,7 +490,7 @@ export function Board() {
       {isLoading ? (
         <LoadingOverlay message="Laster saker…" />
       ) : mode === 'pulse' && selectedProjectKey ? (
-        <ProjectPulse issues={displayedIssues} jiraBaseUrl={jiraBaseUrl} />
+        <ProjectPulse issues={pulseIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : mode === 'timeline' && selectedProjectKey ? (
         <Timeline issues={timelineIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : mode === 'activity' && selectedProjectKey ? (

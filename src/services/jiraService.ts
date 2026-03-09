@@ -202,7 +202,13 @@ export async function getProject(projectKey: string): Promise<JiraProject> {
   return mapProject(response.data);
 }
 
-export async function getIssues(projectKey?: string, jql?: string): Promise<JiraIssue[]> {
+const ISSUE_FIELDS = [
+  'summary', 'description', 'status', 'priority', 'assignee', 'reporter',
+  'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate',
+  'labels', 'startDate', 'parent',
+];
+
+export async function getIssues(projectKey?: string, jql?: string, fetchAll = false): Promise<JiraIssue[]> {
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
 
@@ -211,17 +217,33 @@ export async function getIssues(projectKey?: string, jql?: string): Promise<Jira
     query = `project = "${projectKey}" ORDER BY updated DESC`;
   }
 
-  // Use the new /rest/api/3/search/jql endpoint (old /rest/api/3/search is deprecated)
-  const response = await api.post<{ issues: JiraApiIssue[] }>(
-    `${baseUrl}/rest/api/3/search/jql`,
-    {
-      jql: query,
-      maxResults: 100,
-      fields: ['summary', 'description', 'status', 'priority', 'assignee', 'reporter', 'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate', 'labels', 'startDate', 'parent'],
-    }
-  );
+  if (!fetchAll) {
+    const response = await api.post<{ issues: JiraApiIssue[] }>(
+      `${baseUrl}/rest/api/3/search/jql`,
+      { jql: query, maxResults: 100, fields: ISSUE_FIELDS }
+    );
+    return response.data.issues.map(mapIssue);
+  }
 
-  return response.data.issues.map(mapIssue);
+  // Paginate using cursor-based nextPageToken (required by /rest/api/3/search/jql)
+  const allIssues: JiraApiIssue[] = [];
+  const pageSize = 100;
+  let nextPageToken: string | undefined;
+
+  while (true) {
+    const body: Record<string, unknown> = { jql: query, maxResults: pageSize, fields: ISSUE_FIELDS };
+    if (nextPageToken) body.nextPageToken = nextPageToken;
+
+    const response = await api.post<{ issues: JiraApiIssue[]; nextPageToken?: string }>(
+      `${baseUrl}/rest/api/3/search/jql`,
+      body
+    );
+    allIssues.push(...response.data.issues);
+    nextPageToken = response.data.nextPageToken;
+    if (!nextPageToken || response.data.issues.length === 0) break;
+  }
+
+  return allIssues.map(mapIssue);
 }
 
 export async function getIssue(issueKey: string): Promise<JiraIssue> {

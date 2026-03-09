@@ -298,17 +298,38 @@ export function ProjectPulse({ issues, jiraBaseUrl }: ProjectPulseProps) {
                 ? styles.bubbleOrange
                 : styles.bubbleGray;
 
+            const assignee = epic.assignee;
+            const avatarTitle = assignee
+              ? `Ansvarlig: ${assignee.displayName}`
+              : undefined;
+
             return (
               <div key={epic.key} className={styles.bubbleWrapper}>
-                <button
-                  className={`${styles.bubble} ${healthClass} ${isSelected ? styles.bubbleSelected : ''}`}
-                  style={{ width: bubbleSize, height: bubbleSize }}
-                  onClick={() => handleBubbleClick(bubble)}
-                  title={`${epic.key}: ${epic.summary} — ${Math.round(donePct)}% ferdig, ${totalCount} saker`}
-                >
-                  {isStalled && <span className={styles.stalledDot} title="Stanset — ingen aktivitet på 7+ dager" />}
-                  <BubbleSvg size={bubbleSize} donePct={donePct} health={health} />
-                </button>
+                <div className={styles.bubbleOuter}>
+                  <button
+                    className={`${styles.bubble} ${healthClass} ${isSelected ? styles.bubbleSelected : ''}`}
+                    style={{ width: bubbleSize, height: bubbleSize }}
+                    onClick={() => handleBubbleClick(bubble)}
+                    title={`${epic.key}: ${epic.summary} — ${Math.round(donePct)}% ferdig, ${totalCount} saker`}
+                  >
+                    {isStalled && <span className={styles.stalledDot} title="Stanset — ingen aktivitet på 7+ dager" />}
+                    <BubbleSvg size={bubbleSize} donePct={donePct} health={health} />
+                  </button>
+                  {assignee && (
+                    assignee.avatarUrl ? (
+                      <img
+                        src={assignee.avatarUrl}
+                        alt={assignee.displayName}
+                        className={styles.assigneePin}
+                        title={avatarTitle}
+                      />
+                    ) : (
+                      <div className={styles.assigneePin} title={avatarTitle}>
+                        {assignee.displayName.charAt(0)}
+                      </div>
+                    )
+                  )}
+                </div>
                 <div
                   className={styles.bubbleLabel}
                   style={{ maxWidth: bubbleSize }}

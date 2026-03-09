@@ -99,6 +99,11 @@
   gap: var(--spacing-xs);
 }
 
+.bubbleOuter {
+  position: relative;
+  display: inline-flex;
+}
+
 .bubble {
   border-radius: 50%;
   border: 2.5px solid var(--color-border);
@@ -134,6 +139,27 @@
 
 .bubbleGray {
   border-color: var(--color-border);
+}
+
+/* Assignee avatar pinned to bottom-right edge of bubble */
+.assigneePin {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--color-bg-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 /* Stalled dot */
