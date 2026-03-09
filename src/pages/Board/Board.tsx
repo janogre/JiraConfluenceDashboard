@@ -14,6 +14,7 @@ import {
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraIssue } from '../../types';
 import { Timeline } from './Timeline';
+import { ProjectPulse } from './ProjectPulse';
 import styles from './Board.module.css';
 
 const STARRED_PROJECTS_KEY = 'board_starred_projects';
@@ -40,7 +41,7 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
 export function Board() {
-  const [mode, setMode] = useState<'mine' | 'project' | 'timeline' | 'activity'>('mine');
+  const [mode, setMode] = useState<'mine' | 'project' | 'timeline' | 'activity' | 'pulse'>('mine');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
@@ -72,8 +73,11 @@ export function Board() {
 
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
-    queryFn: () => (mode === 'mine' ? getMyIssues() : getIssues(selectedProjectKey)),
-    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline' || mode === 'activity'))),
+    queryFn: () =>
+      mode === 'mine'
+        ? getMyIssues()
+        : getIssues(selectedProjectKey, undefined, mode === 'timeline' || mode === 'pulse'),
+    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline' || mode === 'activity' || mode === 'pulse'))),
   });
 
   const { data: transitions } = useQuery({
@@ -227,6 +231,13 @@ export function Board() {
     return true;
   });
 
+  // Pulse filtering: priority/assignee filters apply; category filtering handled inside ProjectPulse
+  const pulseIssues = displayedIssues.filter((issue) => {
+    if (filterPriority && issue.priority?.name !== filterPriority) return false;
+    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    return true;
+  });
+
   const relativeTime = (dateString: string): string => {
     const diff = Date.now() - new Date(dateString).getTime();
     const minutes = Math.floor(diff / 60000);
@@ -348,9 +359,17 @@ export function Board() {
           >
             Aktivitet
           </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'pulse' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('pulse')}
+            disabled={!selectedProjectKey}
+            title={!selectedProjectKey ? 'Velg et prosjekt for å bruke arbeidsflate' : 'Vis arbeidsflate'}
+          >
+            Arbeidsflate
+          </button>
         </div>
 
-        {(mode === 'project' || mode === 'timeline') && (
+        {(mode === 'project' || mode === 'timeline' || mode === 'activity' || mode === 'pulse') && (
           <div className={styles.projectSelectWrapper}>
             <select
               className={styles.projectSelect}
@@ -470,6 +489,8 @@ export function Board() {
       {/* Board */}
       {isLoading ? (
         <LoadingOverlay message="Laster saker…" />
+      ) : mode === 'pulse' && selectedProjectKey ? (
+        <ProjectPulse issues={pulseIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : mode === 'timeline' && selectedProjectKey ? (
         <Timeline issues={timelineIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : mode === 'activity' && selectedProjectKey ? (
