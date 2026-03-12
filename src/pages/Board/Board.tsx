@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X } from 'lucide-react';
+import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
 import {
@@ -15,6 +15,7 @@ import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraIssue } from '../../types';
 import { Timeline } from './Timeline';
 import { ProjectPulse } from './ProjectPulse';
+import { SubtaskList } from './SubtaskList';
 import styles from './Board.module.css';
 
 const STARRED_PROJECTS_KEY = 'board_starred_projects';
@@ -46,10 +47,15 @@ export function Board() {
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
   const [starredProjects, setStarredProjects] = useState<Set<string>>(loadStarredProjects);
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
+  const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
+  const [labelSearch, setLabelSearch] = useState('');
   const [sortByDueDate, setSortByDueDate] = useState(false);
   const [timelineShowDone, setTimelineShowDone] = useState(false);
+  const labelDropdownRef = useRef<HTMLDivElement>(null);
 
   const toggleStarProject = (key: string) => {
     setStarredProjects((prev) => {
@@ -60,6 +66,26 @@ export function Board() {
       return next;
     });
   };
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (labelDropdownRef.current && !labelDropdownRef.current.contains(e.target as Node)) {
+        setLabelDropdownOpen(false);
+        setLabelSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggleLabel = (label: string) => {
+    setFilterLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
   const configured = isConfigured();
   const queryClient = useQueryClient();
 
@@ -176,10 +202,23 @@ export function Board() {
 
   const displayedIssues = issues ?? [];
 
+  // Bygg kart over barn basert på parent-felt (dekker vanlige child-saker, ikke bare suboppgavetypen)
+  const derivedChildrenMap = new Map<string, JiraIssue[]>();
+  displayedIssues.forEach((issue) => {
+    if (issue.parent?.key) {
+      const existing = derivedChildrenMap.get(issue.parent.key) ?? [];
+      existing.push(issue);
+      derivedChildrenMap.set(issue.parent.key, existing);
+    }
+  });
+
+  // Sett med saks-nøkler i den nåværende visningen (tildelt meg i "Mine saker")
+  const myIssueKeys = new Set(displayedIssues.map((i) => i.key));
+
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-  // Derive unique priorities and assignees for filter dropdowns
+  // Derive unique priorities, assignees and labels for filter dropdowns
   const availablePriorities = [...new Set(
     displayedIssues.map((i) => i.priority?.name).filter(Boolean) as string[]
   )];
@@ -188,9 +227,15 @@ export function Board() {
       .filter((i) => i.assignee)
       .map((i) => [i.assignee!.displayName, i.assignee!])
   ).values()];
+  const availableLabels = [...new Set(
+    displayedIssues.flatMap((i) => i.labels ?? [])
+  )].sort();
 
   const getColumnIssues = (columnId: ColumnId) => {
-    let result = displayedIssues.filter((issue) => issue.status.category === columnId);
+    // Skjul saker der foreldresaken også finnes i listen — de vises som underoppgaver der
+    let result = displayedIssues.filter(
+      (issue) => !issue.parent?.key || !myIssueKeys.has(issue.parent.key)
+    ).filter((issue) => issue.status.category === columnId);
 
     // Done-filter: siste måned
     if (columnId === 'done' && !showAllDone) {
@@ -210,6 +255,13 @@ export function Board() {
       result = result.filter((issue) => issue.assignee?.displayName === filterAssignee);
     }
 
+    // Etikett-filter (saken må ha alle valgte etiketter)
+    if (filterLabels.size > 0) {
+      result = result.filter((issue) =>
+        [...filterLabels].every((label) => (issue.labels ?? []).includes(label))
+      );
+    }
+
     // Sortering på forfallsdato
     if (sortByDueDate) {
       result = [...result].sort((a, b) => {
@@ -223,18 +275,23 @@ export function Board() {
     return result;
   };
 
-  // Timeline filtering: default hides done issues; priority/assignee filters also apply
+  const matchesLabelFilter = (issue: JiraIssue) =>
+    filterLabels.size === 0 || [...filterLabels].every((l) => (issue.labels ?? []).includes(l));
+
+  // Timeline filtering: default hides done issues; priority/assignee/label filters also apply
   const timelineIssues = displayedIssues.filter((issue) => {
     if (!timelineShowDone && issue.status.category === 'done') return false;
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (!matchesLabelFilter(issue)) return false;
     return true;
   });
 
-  // Pulse filtering: priority/assignee filters apply; category filtering handled inside ProjectPulse
+  // Pulse filtering: priority/assignee/label filters apply; category filtering handled inside ProjectPulse
   const pulseIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (!matchesLabelFilter(issue)) return false;
     return true;
   });
 
@@ -255,6 +312,7 @@ export function Board() {
     .filter((issue) => {
       if (filterPriority && issue.priority?.name !== filterPriority) return false;
       if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+      if (!matchesLabelFilter(issue)) return false;
       return true;
     })
     .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
@@ -321,6 +379,47 @@ export function Board() {
               </Badge>
             )}
           </div>
+          {issue.labels && issue.labels.length > 0 && (
+            <div className={styles.cardLabels}>
+              {issue.labels.map((label) => (
+                <span key={label} className={styles.cardLabel}>{label}</span>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const derivedChildren = derivedChildrenMap.get(issue.key) ?? [];
+            const hasChildren = (issue.subtasks?.length ?? 0) > 0 || derivedChildren.length > 0;
+            if (!hasChildren) return null;
+            const knownCount = Math.max(issue.subtasks?.length ?? 0, derivedChildren.length);
+            return (
+              <div className={styles.subtasksSection}>
+                <button
+                  className={`${styles.subtasksToggle} ${expandedSubtasks.has(issue.key) ? styles.subtasksToggleOpen : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedSubtasks((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(issue.key)) next.delete(issue.key);
+                      else next.add(issue.key);
+                      return next;
+                    });
+                  }}
+                >
+                  <span className={styles.subtasksCount}>{knownCount}</span>
+                  underoppgaver
+                  <ChevronDown size={11} className={styles.subtasksChevron} />
+                </button>
+                {expandedSubtasks.has(issue.key) && (
+                  <SubtaskList
+                    parentKey={issue.key}
+                    jiraBaseUrl={jiraBaseUrl}
+                    fallback={derivedChildren}
+                    myIssueKeys={myIssueKeys}
+                  />
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </Draggable>
@@ -436,6 +535,50 @@ export function Board() {
               ))}
             </select>
 
+            {availableLabels.length > 0 && (
+              <div className={styles.labelDropdownWrapper} ref={labelDropdownRef}>
+                <button
+                  className={`${styles.sortButton} ${filterLabels.size > 0 ? styles.sortButtonActive : ''}`}
+                  onClick={() => { setLabelDropdownOpen((v) => !v); setLabelSearch(''); }}
+                  title="Filtrer på etiketter"
+                >
+                  <Tag size={14} />
+                  Etiketter{filterLabels.size > 0 ? ` (${filterLabels.size})` : ''}
+                  <ChevronDown size={12} />
+                </button>
+                {labelDropdownOpen && (
+                  <div className={styles.labelDropdown}>
+                    <div className={styles.labelSearchWrapper}>
+                      <input
+                        type="text"
+                        className={styles.labelSearchInput}
+                        placeholder="Søk etiketter…"
+                        value={labelSearch}
+                        onChange={(e) => setLabelSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className={styles.labelOptionList}>
+                      {availableLabels
+                        .filter((label) =>
+                          label.toLowerCase().includes(labelSearch.toLowerCase())
+                        )
+                        .map((label) => (
+                          <label key={label} className={styles.labelOption}>
+                            <input
+                              type="checkbox"
+                              checked={filterLabels.has(label)}
+                              onChange={() => toggleLabel(label)}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {mode !== 'timeline' && (
               <button
                 className={`${styles.sortButton} ${sortByDueDate ? styles.sortButtonActive : ''}`}
@@ -458,10 +601,10 @@ export function Board() {
               </button>
             )}
 
-            {(filterPriority || filterAssignee || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
+            {(filterPriority || filterAssignee || filterLabels.size > 0 || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setSortByDueDate(false); setTimelineShowDone(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setSortByDueDate(false); setTimelineShowDone(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />
@@ -663,6 +806,16 @@ export function Board() {
                   >
                     {new Date(selectedIssue.dueDate).toLocaleDateString('nb-NO')}
                   </span>
+                </div>
+              )}
+              {selectedIssue.labels && selectedIssue.labels.length > 0 && (
+                <div className={styles.metaItem}>
+                  <span className={styles.metaLabel}>Etiketter</span>
+                  <div className={styles.modalLabels}>
+                    {selectedIssue.labels.map((label) => (
+                      <span key={label} className={styles.cardLabel}>{label}</span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

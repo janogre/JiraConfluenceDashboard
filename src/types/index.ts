@@ -11,6 +11,20 @@ export interface JiraProject {
   avatarUrl?: string;
 }
 
+export interface JiraSubtask {
+  id: string;
+  key: string;
+  summary: string;
+  status: {
+    name: string;
+    category: 'new' | 'indeterminate' | 'done';
+  };
+  issueType: {
+    name: string;
+    iconUrl?: string;
+  };
+}
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -46,6 +60,7 @@ export interface JiraIssue {
   startDate?: string;
   resolutionDate?: string;
   labels: string[];
+  subtasks?: JiraSubtask[];
   parent?: {
     key: string;
     summary: string;

@@ -1,5 +1,5 @@
 import { getApi, getJiraBaseUrl } from './api';
-import type { JiraProject, JiraIssue, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser } from '../types';
+import type { JiraProject, JiraIssue, JiraSubtask, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser } from '../types';
 
 // Atlassian Document Format type
 interface AdfDocument {
@@ -58,6 +58,18 @@ interface JiraApiIssue {
     duedate?: string;
     resolutiondate?: string;
     labels?: string[];
+    subtasks?: Array<{
+      id: string;
+      key: string;
+      fields: {
+        summary: string;
+        status: {
+          name: string;
+          statusCategory: { key: string };
+        };
+        issuetype: { name: string; iconUrl?: string };
+      };
+    }>;
     startDate?: string;
     parent?: {
       key: string;
@@ -164,6 +176,19 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
     startDate: apiIssue.fields.startDate,
     resolutionDate: apiIssue.fields.resolutiondate,
     labels: apiIssue.fields.labels || [],
+    subtasks: apiIssue.fields.subtasks?.map((s): JiraSubtask => ({
+      id: s.id,
+      key: s.key,
+      summary: s.fields.summary,
+      status: {
+        name: s.fields.status.name,
+        category: mapStatusCategory(s.fields.status.statusCategory.key),
+      },
+      issueType: {
+        name: s.fields.issuetype.name,
+        iconUrl: s.fields.issuetype.iconUrl,
+      },
+    })),
     parent: apiIssue.fields.parent ? {
       key: apiIssue.fields.parent.key,
       summary: apiIssue.fields.parent.fields.summary,
@@ -205,7 +230,7 @@ export async function getProject(projectKey: string): Promise<JiraProject> {
 const ISSUE_FIELDS = [
   'summary', 'description', 'status', 'priority', 'assignee', 'reporter',
   'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate',
-  'labels', 'startDate', 'parent',
+  'labels', 'subtasks', 'startDate', 'parent',
 ];
 
 export async function getIssues(projectKey?: string, jql?: string, fetchAll = false): Promise<JiraIssue[]> {
@@ -346,6 +371,11 @@ export async function getCurrentUser(): Promise<JiraUser> {
     avatarUrl: response.data.avatarUrls?.['48x48'],
     active: response.data.active,
   };
+}
+
+// Get child issues of a parent issue
+export async function getChildIssues(parentKey: string): Promise<JiraIssue[]> {
+  return getIssues(undefined, `parent = "${parentKey}" ORDER BY key ASC`);
 }
 
 // Get issues assigned to current user

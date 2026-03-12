@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { NetworkLogo } from './NetworkLogo';
 import styles from './Layout.module.css';
 
 const navItems = [
@@ -25,7 +26,7 @@ export function Layout() {
 
   const getPageTitle = () => {
     const current = navItems.find((item) => item.path === location.pathname);
-    return current?.label || 'Jira & Confluence Dashboard';
+    return current?.label || 'NETWork';
   };
 
   return (
@@ -42,6 +43,7 @@ export function Layout() {
       </header>
 
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
+        <NetworkLogo />
         <nav className={styles.nav}>
           {navItems.map((item) => (
             <NavLink

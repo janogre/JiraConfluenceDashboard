@@ -62,6 +62,35 @@
   transform: translateX(0);
 }
 
+/* Logo */
+.logoArea {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: var(--spacing-xs);
+}
+
+.logoIcon {
+  flex-shrink: 0;
+}
+
+.logoText {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.logoNet {
+  color: #95c672;
+}
+
+.logoWork {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .nav {
   padding: var(--spacing-md);
   display: flex;
