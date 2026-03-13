@@ -11,6 +11,27 @@ export interface JiraProject {
   avatarUrl?: string;
 }
 
+export interface JiraIssueLink {
+  id: string;
+  type: {
+    name: string;
+    inward: string;
+    outward: string;
+  };
+  inwardIssue?: {
+    key: string;
+    summary: string;
+    status: { name: string; category: 'new' | 'indeterminate' | 'done' };
+    issueType: { name: string; iconUrl?: string };
+  };
+  outwardIssue?: {
+    key: string;
+    summary: string;
+    status: { name: string; category: 'new' | 'indeterminate' | 'done' };
+    issueType: { name: string; iconUrl?: string };
+  };
+}
+
 export interface JiraSubtask {
   id: string;
   key: string;
@@ -61,6 +82,7 @@ export interface JiraIssue {
   resolutionDate?: string;
   labels: string[];
   subtasks?: JiraSubtask[];
+  links?: JiraIssueLink[];
   parent?: {
     key: string;
     summary: string;
@@ -153,6 +175,15 @@ export interface TodoItem {
   dueDate?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface JiraSprint {
+  id: number;
+  name: string;
+  state: 'active' | 'closed' | 'future';
+  startDate?: string;
+  endDate?: string;
+  goal?: string;
 }
 
 // API Configuration

@@ -10,11 +10,14 @@ import {
   getIssues,
   getTransitions,
   transitionIssue,
+  getCurrentUser,
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraIssue } from '../../types';
 import { Timeline } from './Timeline';
 import { ProjectPulse } from './ProjectPulse';
+import { IssueList } from './IssueList';
+import { SprintView } from './SprintView';
 import { SubtaskList } from './SubtaskList';
 import styles from './Board.module.css';
 
@@ -42,7 +45,7 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
 export function Board() {
-  const [mode, setMode] = useState<'mine' | 'project' | 'timeline' | 'activity' | 'pulse'>('mine');
+  const [mode, setMode] = useState<'mine' | 'project' | 'list' | 'timeline' | 'activity' | 'pulse' | 'sprint'>('mine');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
@@ -50,11 +53,13 @@ export function Board() {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState('');
   const [sortByDueDate, setSortByDueDate] = useState(false);
   const [timelineShowDone, setTimelineShowDone] = useState(false);
+  const [includeDone, setIncludeDone] = useState(false);
   const labelDropdownRef = useRef<HTMLDivElement>(null);
 
   const toggleStarProject = (key: string) => {
@@ -89,7 +94,13 @@ export function Board() {
   const configured = isConfigured();
   const queryClient = useQueryClient();
 
-  const boardQueryKey = ['boardIssues', mode, selectedProjectKey] as const;
+  const projectJql = selectedProjectKey
+    ? includeDone
+      ? `project = "${selectedProjectKey}" ORDER BY updated DESC`
+      : `project = "${selectedProjectKey}" AND statusCategory != Done ORDER BY updated DESC`
+    : '';
+
+  const boardQueryKey = ['boardIssues', mode === 'sprint' ? 'sprint' : mode, selectedProjectKey, includeDone] as const;
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -100,10 +111,22 @@ export function Board() {
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
     queryFn: () =>
-      mode === 'mine'
+      mode === 'mine' || (mode === 'list' && !selectedProjectKey)
         ? getMyIssues()
-        : getIssues(selectedProjectKey, undefined, mode === 'timeline' || mode === 'pulse'),
-    enabled: configured && (mode === 'mine' || (!!selectedProjectKey && (mode === 'project' || mode === 'timeline' || mode === 'activity' || mode === 'pulse'))),
+        : getIssues(undefined, projectJql, true),
+    enabled:
+      configured &&
+      (mode === 'mine' ||
+        (mode === 'list' && !selectedProjectKey) ||
+        (!!selectedProjectKey &&
+          (mode === 'project' || mode === 'list' || mode === 'timeline' || mode === 'activity' || mode === 'pulse'))),
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: getCurrentUser,
+    enabled: configured,
+    staleTime: 1000 * 60 * 30,
   });
 
   const { data: transitions } = useQuery({
@@ -212,8 +235,11 @@ export function Board() {
     }
   });
 
-  // Sett med saks-nøkler i den nåværende visningen (tildelt meg i "Mine saker")
+  // Sett med saks-nøkler i den nåværende visningen — brukes til deduplisering av barn/forelder
   const myIssueKeys = new Set(displayedIssues.map((i) => i.key));
+
+  // Innlogget brukers visningsnavn — brukes til "Meg"-merket i underoppgavelisten.
+  const currentUserDisplayName = currentUser?.displayName;
 
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -230,6 +256,13 @@ export function Board() {
   const availableLabels = [...new Set(
     displayedIssues.flatMap((i) => i.labels ?? [])
   )].sort();
+
+  const availableStatuses = [...new Map(
+    displayedIssues.map((i) => [i.status.name, i.status])
+  ).values()].sort((a, b) => {
+    const catOrder = { new: 0, indeterminate: 1, done: 2 };
+    return catOrder[a.category] - catOrder[b.category] || a.name.localeCompare(b.name);
+  });
 
   const getColumnIssues = (columnId: ColumnId) => {
     // Skjul saker der foreldresaken også finnes i listen — de vises som underoppgaver der
@@ -284,6 +317,21 @@ export function Board() {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
+    return true;
+  });
+
+  // List filtering: priority/assignee/label/status filters apply
+  const listIssues = displayedIssues.filter((issue) => {
+    if (filterPriority && issue.priority?.name !== filterPriority) return false;
+    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (!matchesLabelFilter(issue)) return false;
+    if (filterStatus) {
+      if (filterStatus.startsWith('cat:')) {
+        if (issue.status.category !== filterStatus.slice(4)) return false;
+      } else {
+        if (issue.status.name !== filterStatus) return false;
+      }
+    }
     return true;
   });
 
@@ -414,7 +462,7 @@ export function Board() {
                     parentKey={issue.key}
                     jiraBaseUrl={jiraBaseUrl}
                     fallback={derivedChildren}
-                    myIssueKeys={myIssueKeys}
+                    currentUserDisplayName={currentUserDisplayName}
                   />
                 )}
               </div>
@@ -443,6 +491,12 @@ export function Board() {
             Prosjekt
           </button>
           <button
+            className={`${styles.modeButton} ${mode === 'list' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('list')}
+          >
+            Liste
+          </button>
+          <button
             className={`${styles.modeButton} ${mode === 'timeline' ? styles.modeButtonActive : ''}`}
             onClick={() => setMode('timeline')}
             disabled={!selectedProjectKey}
@@ -466,9 +520,17 @@ export function Board() {
           >
             Arbeidsflate
           </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'sprint' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('sprint')}
+            disabled={!selectedProjectKey}
+            title={!selectedProjectKey ? 'Velg et prosjekt for å se sprint' : 'Vis sprint'}
+          >
+            Sprint
+          </button>
         </div>
 
-        {(mode === 'project' || mode === 'timeline' || mode === 'activity' || mode === 'pulse') && (
+        {(mode === 'project' || mode === 'list' || mode === 'timeline' || mode === 'activity' || mode === 'pulse' || mode === 'sprint') && (
           <div className={styles.projectSelectWrapper}>
             <select
               className={styles.projectSelect}
@@ -507,6 +569,17 @@ export function Board() {
               </button>
             )}
           </div>
+        )}
+
+        {selectedProjectKey && mode !== 'mine' && mode !== 'sprint' && (
+          <button
+            className={`${styles.sortButton} ${includeDone ? styles.sortButtonActive : ''}`}
+            onClick={() => setIncludeDone((v) => !v)}
+            title={includeDone ? 'Skjul ferdigstilte saker' : 'Inkluder ferdigstilte saker'}
+          >
+            {includeDone ? <EyeOff size={14} /> : <Eye size={14} />}
+            Ferdig
+          </button>
         )}
 
         {displayedIssues.length > 0 && (
@@ -579,6 +652,27 @@ export function Board() {
               </div>
             )}
 
+            {mode === 'list' && availableStatuses.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                title="Filtrer på status"
+              >
+                <option value="">Alle statuser</option>
+                <optgroup label="Kategori">
+                  <option value="cat:new">Å gjøre</option>
+                  <option value="cat:indeterminate">Pågår</option>
+                  <option value="cat:done">Ferdig</option>
+                </optgroup>
+                <optgroup label="Spesifikk status">
+                  {availableStatuses.map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
+
             {mode !== 'timeline' && (
               <button
                 className={`${styles.sortButton} ${sortByDueDate ? styles.sortButtonActive : ''}`}
@@ -601,10 +695,10 @@ export function Board() {
               </button>
             )}
 
-            {(filterPriority || filterAssignee || filterLabels.size > 0 || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
+            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setSortByDueDate(false); setTimelineShowDone(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setSortByDueDate(false); setTimelineShowDone(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />
@@ -632,6 +726,18 @@ export function Board() {
       {/* Board */}
       {isLoading ? (
         <LoadingOverlay message="Laster saker…" />
+      ) : mode === 'sprint' && selectedProjectKey ? (
+        <SprintView
+          projectKey={selectedProjectKey}
+          jiraBaseUrl={jiraBaseUrl}
+          onIssueClick={setSelectedIssue}
+        />
+      ) : mode === 'list' ? (
+        <IssueList
+          issues={listIssues}
+          jiraBaseUrl={jiraBaseUrl}
+          onIssueClick={setSelectedIssue}
+        />
       ) : mode === 'pulse' && selectedProjectKey ? (
         <ProjectPulse issues={pulseIssues} jiraBaseUrl={jiraBaseUrl} />
       ) : mode === 'timeline' && selectedProjectKey ? (
@@ -848,6 +954,57 @@ export function Board() {
                       {t.name}
                     </Button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {selectedIssue.links && selectedIssue.links.length > 0 && (
+              <div className={styles.modalSection}>
+                <span className={styles.metaLabel}>Avhengigheter</span>
+                <div className={styles.dependencyList}>
+                  {selectedIssue.links.map((link) => {
+                    const linkedIssue = link.inwardIssue ?? link.outwardIssue;
+                    const direction = link.inwardIssue ? link.type.inward : link.type.outward;
+                    if (!linkedIssue) return null;
+                    const typeLower = link.type.name.toLowerCase();
+                    const isBlocked = !!link.inwardIssue && (typeLower.includes('block') || typeLower.includes('blokkerer'));
+                    const isBlocking = !!link.outwardIssue && (typeLower.includes('block') || typeLower.includes('blokkerer'));
+                    const depClass = isBlocked
+                      ? styles.depBlocked
+                      : isBlocking
+                      ? styles.depBlocking
+                      : styles.depRelated;
+                    return (
+                      <div key={link.id} className={`${styles.dependencyItem} ${depClass}`}>
+                        <span className={styles.depDirection}>{direction}</span>
+                        {linkedIssue.issueType?.iconUrl && (
+                          <img src={linkedIssue.issueType.iconUrl} alt="" className={styles.depIcon} />
+                        )}
+                        <a
+                          href={`${jiraBaseUrl}/browse/${linkedIssue.key}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.depKey}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {linkedIssue.key}
+                        </a>
+                        <span className={styles.depSummary}>{linkedIssue.summary}</span>
+                        <Badge
+                          variant={
+                            linkedIssue.status.category === 'done'
+                              ? 'success'
+                              : linkedIssue.status.category === 'indeterminate'
+                              ? 'primary'
+                              : 'default'
+                          }
+                          size="sm"
+                        >
+                          {linkedIssue.status.name}
+                        </Badge>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

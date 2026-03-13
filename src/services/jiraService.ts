@@ -1,5 +1,5 @@
 import { getApi, getJiraBaseUrl } from './api';
-import type { JiraProject, JiraIssue, JiraSubtask, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser } from '../types';
+import type { JiraProject, JiraIssue, JiraIssueLink, JiraSubtask, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser, JiraSprint } from '../types';
 
 // Atlassian Document Format type
 interface AdfDocument {
@@ -71,6 +71,26 @@ interface JiraApiIssue {
       };
     }>;
     startDate?: string;
+    issuelinks?: Array<{
+      id: string;
+      type: { name: string; inward: string; outward: string };
+      inwardIssue?: {
+        key: string;
+        fields: {
+          summary: string;
+          status: { name: string; statusCategory: { key: string } };
+          issuetype: { name: string; iconUrl?: string };
+        };
+      };
+      outwardIssue?: {
+        key: string;
+        fields: {
+          summary: string;
+          status: { name: string; statusCategory: { key: string } };
+          issuetype: { name: string; iconUrl?: string };
+        };
+      };
+    }>;
     parent?: {
       key: string;
       fields: {
@@ -194,6 +214,28 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
       summary: apiIssue.fields.parent.fields.summary,
       issueType: apiIssue.fields.parent.fields.issuetype,
     } : undefined,
+    links: apiIssue.fields.issuelinks?.map((link): JiraIssueLink => ({
+      id: link.id,
+      type: link.type,
+      inwardIssue: link.inwardIssue ? {
+        key: link.inwardIssue.key,
+        summary: link.inwardIssue.fields.summary,
+        status: {
+          name: link.inwardIssue.fields.status.name,
+          category: mapStatusCategory(link.inwardIssue.fields.status.statusCategory.key),
+        },
+        issueType: link.inwardIssue.fields.issuetype,
+      } : undefined,
+      outwardIssue: link.outwardIssue ? {
+        key: link.outwardIssue.key,
+        summary: link.outwardIssue.fields.summary,
+        status: {
+          name: link.outwardIssue.fields.status.name,
+          category: mapStatusCategory(link.outwardIssue.fields.status.statusCategory.key),
+        },
+        issueType: link.outwardIssue.fields.issuetype,
+      } : undefined,
+    })),
   };
 }
 
@@ -230,7 +272,7 @@ export async function getProject(projectKey: string): Promise<JiraProject> {
 const ISSUE_FIELDS = [
   'summary', 'description', 'status', 'priority', 'assignee', 'reporter',
   'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate',
-  'labels', 'subtasks', 'startDate', 'parent',
+  'labels', 'subtasks', 'startDate', 'parent', 'issuelinks',
 ];
 
 export async function getIssues(projectKey?: string, jql?: string, fetchAll = false): Promise<JiraIssue[]> {
@@ -515,6 +557,51 @@ export async function addWorklog(
       content: [{ type: 'paragraph', content: [{ type: 'text', text: comment }] }],
     } : undefined,
   });
+}
+
+// Get sprints for a project (via its Scrum board)
+export async function getSprints(projectKey: string): Promise<JiraSprint[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const boardsResponse = await api.get<{
+    values: Array<{ id: number; name: string; type: string }>;
+  }>(`${baseUrl}/rest/agile/1.0/board`, { params: { projectKeyOrId: projectKey } });
+
+  const board =
+    boardsResponse.data.values.find((b) => b.type === 'scrum') ??
+    boardsResponse.data.values[0];
+  if (!board) return [];
+
+  const sprintsResponse = await api.get<{
+    values: Array<{
+      id: number;
+      name: string;
+      state: string;
+      startDate?: string;
+      endDate?: string;
+      goal?: string;
+    }>;
+  }>(`${baseUrl}/rest/agile/1.0/board/${board.id}/sprint`, { params: { maxResults: 50 } });
+
+  return sprintsResponse.data.values.map((s) => ({
+    id: s.id,
+    name: s.name,
+    state: s.state as 'active' | 'closed' | 'future',
+    startDate: s.startDate,
+    endDate: s.endDate,
+    goal: s.goal,
+  }));
+}
+
+// Get issues for a specific sprint
+export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<{ issues: JiraApiIssue[] }>(
+    `${baseUrl}/rest/agile/1.0/sprint/${sprintId}/issue`,
+    { params: { fields: ISSUE_FIELDS.join(','), maxResults: 500 } }
+  );
+  return response.data.issues.map(mapIssue);
 }
 
 // Run a filter by ID

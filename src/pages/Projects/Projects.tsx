@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, ExternalLink, ChevronRight, User, MessageSquare, Clock, ArrowLeft, RefreshCw, X, AlertCircle } from 'lucide-react';
+import { Search, ExternalLink, ChevronRight, User, MessageSquare, Clock, ArrowLeft, RefreshCw, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, Badge, Input, LoadingOverlay, Modal, Button } from '../../components/common';
 import {
@@ -24,6 +24,7 @@ export function Projects() {
   const [issueSearchInput, setIssueSearchInput] = useState('');
   const [issueSearchQuery, setIssueSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [includeDone, setIncludeDone] = useState(false);
   const [mineSearch, setMineSearch] = useState('');
   const [mineStatusFilter, setMineStatusFilter] = useState<string | null>(null);
   const [minePriorityFilter, setMinePriorityFilter] = useState<string | null>(null);
@@ -44,9 +45,15 @@ export function Projects() {
     enabled: configured && filterMine,
   });
 
+  const projectJql = selectedProject
+    ? includeDone
+      ? `project = "${selectedProject.key}" ORDER BY updated DESC`
+      : `project = "${selectedProject.key}" AND statusCategory != Done ORDER BY updated DESC`
+    : '';
+
   const { data: projectIssues, isLoading: loadingIssues, isError: errorIssues } = useQuery({
-    queryKey: ['projectIssues', selectedProject?.key],
-    queryFn: () => getIssues(selectedProject!.key),
+    queryKey: ['projectIssues', selectedProject?.key, includeDone],
+    queryFn: () => getIssues(undefined, projectJql, true),
     enabled: !!selectedProject,
   });
 
@@ -638,6 +645,14 @@ export function Projects() {
                 {selectedProject.name} – saker ({displayedIssues.length}
                 {statusFilter ? ` av ${projectIssues?.length}` : ''})
               </h3>
+              <button
+                className={`${styles.statusFilterBtn} ${includeDone ? styles.statusFilterActive : ''}`}
+                onClick={() => { setIncludeDone((v) => !v); setStatusFilter(null); }}
+                title={includeDone ? 'Skjul ferdigstilte saker' : 'Inkluder ferdigstilte saker'}
+              >
+                {includeDone ? <EyeOff size={13} /> : <Eye size={13} />}
+                Ferdig
+              </button>
               <a
                 href={`${jiraBaseUrl}/jira/software/projects/${selectedProject.key}/boards`}
                 target="_blank"
