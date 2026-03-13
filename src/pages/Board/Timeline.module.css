@@ -251,6 +251,23 @@
   z-index: 3;
 }
 
+.barMilestone {
+  position: absolute;
+  height: 22px;
+  width: 3px !important;
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 0.15s;
+  opacity: 0.8;
+}
+
+.barMilestone:hover {
+  filter: brightness(0.88);
+  z-index: 3;
+  opacity: 1;
+}
+
 .barLabel {
   font-size: 0.7rem;
   font-weight: 600;

@@ -141,22 +141,31 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
 
   // Bar calculation — left and right positions calculated independently from windowStart
   // so that issues created before the visible window don't inflate bar width.
-  function getBar(issue: JiraIssue): { left: number; width: number } | null {
-    const startStr = issue.startDate ?? issue.created;
+  function getBar(issue: JiraIssue): { left: number; width: number; isMilestone?: boolean } | null {
     const endStr = issue.dueDate;
     if (!endStr) return null;
-    const start = new Date(startStr);
     const end = new Date(endStr);
-    if (end <= start) return null;
-    const startOffset = (start.getTime() - windowStart.getTime()) / MS_PER_DAY;
-    const endOffset = (end.getTime() - windowStart.getTime()) / MS_PER_DAY;
-    const leftPct = (startOffset / windowDays) * 100;
-    const rightPct = (endOffset / windowDays) * 100;
-    const clampedLeft = clamp(leftPct, 0, 100);
-    const clampedRight = clamp(rightPct, 0, 100);
-    const clampedWidth = clampedRight - clampedLeft;
-    if (clampedWidth < 0.2) return null;
-    return { left: clampedLeft, width: clampedWidth };
+
+    if (issue.startDate) {
+      const start = new Date(issue.startDate);
+      if (end <= start) return null;
+      const startOffset = (start.getTime() - windowStart.getTime()) / MS_PER_DAY;
+      const endOffset = (end.getTime() - windowStart.getTime()) / MS_PER_DAY;
+      const leftPct = (startOffset / windowDays) * 100;
+      const rightPct = (endOffset / windowDays) * 100;
+      const clampedLeft = clamp(leftPct, 0, 100);
+      const clampedRight = clamp(rightPct, 0, 100);
+      const clampedWidth = clampedRight - clampedLeft;
+      if (clampedWidth < 0.2) return null;
+      return { left: clampedLeft, width: clampedWidth };
+    } else {
+      // Ingen startdato — vis som milestone ved forfallsdato
+      const endOffset = (end.getTime() - windowStart.getTime()) / MS_PER_DAY;
+      const leftPct = (endOffset / windowDays) * 100;
+      const clampedLeft = clamp(leftPct, 0, 100);
+      if (clampedLeft <= 0 || clampedLeft >= 100) return null;
+      return { left: clampedLeft, width: 0.6, isMilestone: true };
+    }
   }
 
   const todayLeft = ((today.getTime() - windowStart.getTime()) / MS_PER_DAY / windowDays) * 100;
@@ -272,15 +281,17 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
                       href={`${jiraBaseUrl}/browse/${issue.key}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={styles.bar}
-                      title={`${issue.key}: ${issue.summary}\n${issue.startDate ?? issue.created} → ${issue.dueDate}`}
+                      className={bar.isMilestone ? styles.barMilestone : styles.bar}
+                      title={bar.isMilestone
+                        ? `${issue.key}: ${issue.summary}\nFrist: ${issue.dueDate}`
+                        : `${issue.key}: ${issue.summary}\n${issue.startDate} → ${issue.dueDate}`}
                       style={{
                         left: `${bar.left}%`,
                         width: `${bar.width}%`,
                         backgroundColor: barColor(issue.status.category),
                       }}
                     >
-                      <span className={styles.barLabel}>{issue.summary}</span>
+                      {!bar.isMilestone && <span className={styles.barLabel}>{issue.summary}</span>}
                     </a>
                   )}
                 </div>

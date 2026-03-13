@@ -54,6 +54,7 @@ export function Board() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterIssueType, setFilterIssueType] = useState('');
   const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState('');
@@ -257,6 +258,10 @@ export function Board() {
     displayedIssues.flatMap((i) => i.labels ?? [])
   )].sort();
 
+  const availableIssueTypes = [...new Map(
+    displayedIssues.map((i) => [i.issueType.name, i.issueType])
+  ).values()].sort((a, b) => a.name.localeCompare(b.name));
+
   const availableStatuses = [...new Map(
     displayedIssues.map((i) => [i.status.name, i.status])
   ).values()].sort((a, b) => {
@@ -320,7 +325,7 @@ export function Board() {
     return true;
   });
 
-  // List filtering: priority/assignee/label/status filters apply
+  // List filtering: priority/assignee/label/status/issueType filters apply
   const listIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
@@ -332,6 +337,7 @@ export function Board() {
         if (issue.status.name !== filterStatus) return false;
       }
     }
+    if (filterIssueType && issue.issueType.name !== filterIssueType) return false;
     return true;
   });
 
@@ -652,6 +658,20 @@ export function Board() {
               </div>
             )}
 
+            {mode === 'list' && availableIssueTypes.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterIssueType}
+                onChange={(e) => setFilterIssueType(e.target.value)}
+                title="Filtrer på oppgavetype"
+              >
+                <option value="">Alle typer</option>
+                {availableIssueTypes.map((t) => (
+                  <option key={t.name} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+            )}
+
             {mode === 'list' && availableStatuses.length > 0 && (
               <select
                 className={styles.filterSelect}
@@ -695,10 +715,10 @@ export function Board() {
               </button>
             )}
 
-            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
+            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || filterIssueType || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setSortByDueDate(false); setTimelineShowDone(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setFilterIssueType(''); setSortByDueDate(false); setTimelineShowDone(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />

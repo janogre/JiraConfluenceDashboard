@@ -71,6 +71,7 @@ interface JiraApiIssue {
       };
     }>;
     startDate?: string;
+    customfield_10015?: string; // Startdato i Jira Cloud (alternativt feltnøkkel)
     issuelinks?: Array<{
       id: string;
       type: { name: string; inward: string; outward: string };
@@ -115,6 +116,36 @@ interface JiraApiProject {
   avatarUrls?: {
     '48x48'?: string;
   };
+}
+
+// Module-level cache for all discovered start date field keys (array, or null if discovery ran but found nothing)
+let _startDateFieldKeys: string[] | null | undefined = undefined;
+
+export function resetFieldDiscoveryCache(): void {
+  _startDateFieldKeys = undefined;
+}
+
+async function discoverStartDateFieldKeys(): Promise<void> {
+  if (_startDateFieldKeys !== undefined) return;
+  try {
+    const api = getApi();
+    const baseUrl = getJiraBaseUrl();
+    const response = await api.get<Array<{
+      id: string;
+      name: string;
+      schema?: { type?: string; system?: string; custom?: string };
+    }>>(`${baseUrl}/rest/api/3/field`);
+
+    const startDateNames = new Set(['start date', 'startdato', 'start dato']);
+    const fields = response.data.filter(
+      (f) =>
+        startDateNames.has(f.name.toLowerCase()) &&
+        f.schema?.type === 'date'
+    );
+    _startDateFieldKeys = fields.length > 0 ? fields.map((f) => f.id) : null;
+  } catch {
+    _startDateFieldKeys = null;
+  }
 }
 
 function mapStatusCategory(key: string): 'new' | 'indeterminate' | 'done' {
@@ -193,7 +224,15 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
     created: apiIssue.fields.created,
     updated: apiIssue.fields.updated,
     dueDate: apiIssue.fields.duedate,
-    startDate: apiIssue.fields.startDate,
+    startDate: (() => {
+      const raw = apiIssue.fields as unknown as Record<string, string | undefined>;
+      if (apiIssue.fields.startDate) return apiIssue.fields.startDate;
+      if (apiIssue.fields.customfield_10015) return apiIssue.fields.customfield_10015;
+      for (const key of (_startDateFieldKeys ?? [])) {
+        if (raw[key]) return raw[key];
+      }
+      return undefined;
+    })(),
     resolutionDate: apiIssue.fields.resolutiondate,
     labels: apiIssue.fields.labels || [],
     subtasks: apiIssue.fields.subtasks?.map((s): JiraSubtask => ({
@@ -272,42 +311,55 @@ export async function getProject(projectKey: string): Promise<JiraProject> {
 const ISSUE_FIELDS = [
   'summary', 'description', 'status', 'priority', 'assignee', 'reporter',
   'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate',
-  'labels', 'subtasks', 'startDate', 'parent', 'issuelinks',
+  'labels', 'subtasks', 'startDate', 'customfield_10015', 'parent', 'issuelinks',
 ];
 
+function buildIssueFields(): string[] {
+  const fields = [...ISSUE_FIELDS];
+  for (const key of (_startDateFieldKeys ?? [])) {
+    if (!fields.includes(key)) fields.push(key);
+  }
+  return fields;
+}
+
 export async function getIssues(projectKey?: string, jql?: string, fetchAll = false): Promise<JiraIssue[]> {
+  await discoverStartDateFieldKeys();
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
+  const fieldsParam = buildIssueFields().join(',');
 
   let query = jql || '';
   if (projectKey && !jql) {
     query = `project = "${projectKey}" ORDER BY updated DESC`;
   }
 
-  if (!fetchAll) {
-    const response = await api.post<{ issues: JiraApiIssue[] }>(
-      `${baseUrl}/rest/api/3/search/jql`,
-      { jql: query, maxResults: 100, fields: ISSUE_FIELDS }
-    );
-    return response.data.issues.map(mapIssue);
-  }
-
-  // Paginate using cursor-based nextPageToken (required by /rest/api/3/search/jql)
-  const allIssues: JiraApiIssue[] = [];
   const pageSize = 100;
-  let nextPageToken: string | undefined;
+  const fields = fieldsParam.split(',');
 
-  while (true) {
-    const body: Record<string, unknown> = { jql: query, maxResults: pageSize, fields: ISSUE_FIELDS };
+  const fetchPage = (nextPageToken?: string) => {
+    const body: Record<string, unknown> = { jql: query, maxResults: pageSize, fields };
     if (nextPageToken) body.nextPageToken = nextPageToken;
-
-    const response = await api.post<{ issues: JiraApiIssue[]; nextPageToken?: string }>(
+    return api.post<{ issues: JiraApiIssue[]; nextPageToken?: string }>(
       `${baseUrl}/rest/api/3/search/jql`,
       body
     );
-    allIssues.push(...response.data.issues);
-    nextPageToken = response.data.nextPageToken;
-    if (!nextPageToken || response.data.issues.length === 0) break;
+  };
+
+  if (!fetchAll) {
+    const response = await fetchPage();
+    return response.data.issues.map(mapIssue);
+  }
+
+  // Paginate using cursor-based nextPageToken
+  const allIssues: JiraApiIssue[] = [];
+  let nextPageToken: string | undefined;
+
+  while (true) {
+    const response = await fetchPage(nextPageToken);
+    const { issues, nextPageToken: next } = response.data;
+    allIssues.push(...issues);
+    nextPageToken = next;
+    if (!nextPageToken || issues.length === 0) break;
   }
 
   return allIssues.map(mapIssue);
@@ -595,11 +647,13 @@ export async function getSprints(projectKey: string): Promise<JiraSprint[]> {
 
 // Get issues for a specific sprint
 export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
+  await discoverStartDateFieldKeys();
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
+  const fieldsParam = buildIssueFields().join(',');
   const response = await api.get<{ issues: JiraApiIssue[] }>(
     `${baseUrl}/rest/agile/1.0/sprint/${sprintId}/issue`,
-    { params: { fields: ISSUE_FIELDS.join(','), maxResults: 500 } }
+    { params: { fields: fieldsParam, maxResults: 500 } }
   );
   return response.data.issues.map(mapIssue);
 }
