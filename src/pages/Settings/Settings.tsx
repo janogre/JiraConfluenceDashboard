@@ -15,6 +15,7 @@ function getInitialConfig(): ApiConfig {
     confluenceBaseUrl: '',
     email: '',
     apiToken: '',
+    anthropicApiKey: '',
   };
 }
 
@@ -106,6 +107,14 @@ export function Settings() {
               placeholder="Your Jira/Confluence API token"
               value={config.apiToken}
               onChange={(e) => handleChange('apiToken', e.target.value)}
+            />
+
+            <Input
+              label="Anthropic API Key (valgfri – brukes av Ukessammendrag)"
+              type="password"
+              placeholder="sk-ant-..."
+              value={config.anthropicApiKey ?? ''}
+              onChange={(e) => handleChange('anthropicApiKey', e.target.value)}
             />
 
             <Button onClick={handleSave} icon={<Save size={16} />}>

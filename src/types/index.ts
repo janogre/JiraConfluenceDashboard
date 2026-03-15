@@ -186,10 +186,24 @@ export interface JiraSprint {
   goal?: string;
 }
 
+// Calendar Types
+export type AbsenceType = 'ferie' | 'syk' | 'avspasering' | 'annet';
+
+export interface AbsenceEntry {
+  id: string;
+  personAccountId: string;
+  personName: string;
+  startDate: string;
+  endDate: string;
+  type: AbsenceType;
+  note?: string;
+}
+
 // API Configuration
 export interface ApiConfig {
   jiraBaseUrl: string;
   confluenceBaseUrl: string;
   email: string;
   apiToken: string;
+  anthropicApiKey?: string;
 }

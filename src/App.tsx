@@ -6,6 +6,10 @@ import { Confluence } from './pages/Confluence/Confluence';
 import { Board } from './pages/Board/Board';
 import { Todos } from './pages/Todos/Todos';
 import { Settings } from './pages/Settings/Settings';
+import { Risk } from './pages/Risk/Risk';
+import { Digest } from './pages/Digest/Digest';
+import { TeamCalendar } from './pages/Calendar/Calendar';
+import { MyMetrics } from './pages/MyMetrics/MyMetrics';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -28,6 +32,10 @@ function App() {
             <Route path="board" element={<Board />} />
             <Route path="todos" element={<Todos />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="risk" element={<Risk />} />
+            <Route path="digest" element={<Digest />} />
+            <Route path="calendar" element={<TeamCalendar />} />
+            <Route path="my-metrics" element={<MyMetrics />} />
           </Route>
         </Routes>
       </BrowserRouter>

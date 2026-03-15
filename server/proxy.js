@@ -184,6 +184,33 @@ app.all('/api/atlassian/proxy', async (req, res) => {
   }
 });
 
+// AI digest endpoint
+app.post('/api/ai/digest', express.json(), async (req, res) => {
+  const { messages, apiKey } = req.body;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'Missing Anthropic API key' });
+  }
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        messages,
+      }),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================

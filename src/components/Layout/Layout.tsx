@@ -7,6 +7,10 @@ import {
   Settings,
   Menu,
   X,
+  AlertTriangle,
+  Sparkles,
+  Calendar,
+  TrendingUp,
 } from 'lucide-react';
 import { useState } from 'react';
 import { NetworkLogo } from './NetworkLogo';
@@ -17,6 +21,10 @@ const navItems = [
   { path: '/confluence', icon: FileText, label: 'Confluence' },
   { path: '/board', icon: Kanban, label: 'Jira Board' },
   { path: '/todos', icon: CheckSquare, label: 'My Todos' },
+  { path: '/risk', icon: AlertTriangle, label: 'Risikopanel' },
+  { path: '/digest', icon: Sparkles, label: 'Ukessammendrag' },
+  { path: '/calendar', icon: Calendar, label: 'Team-kalender' },
+  { path: '/my-metrics', icon: TrendingUp, label: 'Mine metrics' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
