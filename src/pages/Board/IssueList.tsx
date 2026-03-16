@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
-import { Badge } from '../../components/common';
+import { ChevronUp, ChevronDown, CheckSquare, Check } from 'lucide-react';
+import { Badge, Modal } from '../../components/common';
+import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
 import styles from './IssueList.module.css';
 
@@ -33,9 +34,98 @@ function getPriorityVariant(priority?: string) {
   }
 }
 
+function mapJiraPriority(jiraPriority?: string): 'low' | 'medium' | 'high' {
+  switch (jiraPriority?.toLowerCase()) {
+    case 'highest':
+    case 'high':
+      return 'high';
+    case 'medium':
+      return 'medium';
+    default:
+      return 'low';
+  }
+}
+
+interface CreateTodoModalProps {
+  issue: JiraIssue;
+  onClose: () => void;
+}
+
+function CreateTodoModal({ issue, onClose }: CreateTodoModalProps) {
+  const { addTodo } = useTodoStore();
+  const [content, setContent] = useState(`[${issue.key}] ${issue.summary}`);
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(mapJiraPriority(issue.priority?.name));
+  const [dueDate, setDueDate] = useState(issue.dueDate?.split('T')[0] ?? '');
+  const [created, setCreated] = useState(false);
+
+  const handleCreate = () => {
+    addTodo({
+      content: content.trim(),
+      priority,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      linkedJiraIssue: issue.key,
+    });
+    setCreated(true);
+    setTimeout(onClose, 1500);
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Opprett todo fra Jira-issue" size="sm">
+      {created ? (
+        <div className={styles.createdConfirm}>
+          <Check size={20} className={styles.createdIcon} />
+          Todo opprettet!
+        </div>
+      ) : (
+        <div className={styles.createForm}>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Innhold</label>
+            <input
+              className={styles.formInput}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Prioritet</label>
+            <select
+              className={styles.formSelect}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+            >
+              <option value="low">Lav</option>
+              <option value="medium">Middels</option>
+              <option value="high">Høy</option>
+            </select>
+          </div>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Forfallsdato</label>
+            <input
+              type="date"
+              className={styles.formInput}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div className={styles.formActions}>
+            <button className={styles.createBtn} onClick={handleCreate} disabled={!content.trim()}>
+              Opprett todo
+            </button>
+            <button className={styles.cancelBtn} onClick={onClose}>
+              Avbryt
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps) {
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [createTodoFor, setCreateTodoFor] = useState<JiraIssue | null>(null);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -84,135 +174,154 @@ export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps)
   }
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.table}>
-        <div className={styles.headerRow}>
-          <div className={styles.colType} />
-          <button className={styles.colHeader} onClick={() => handleSort('key')}>
-            Nøkkel <SortIcon col="key" />
-          </button>
-          <button className={`${styles.colHeader} ${styles.colSummaryHeader}`} onClick={() => handleSort('summary')}>
-            Tittel <SortIcon col="summary" />
-          </button>
-          <button className={styles.colHeader} onClick={() => handleSort('status')}>
-            Status <SortIcon col="status" />
-          </button>
-          <button className={styles.colHeader} onClick={() => handleSort('priority')}>
-            Prioritet <SortIcon col="priority" />
-          </button>
-          <button className={styles.colHeader} onClick={() => handleSort('assignee')}>
-            Tildelt <SortIcon col="assignee" />
-          </button>
-          <button className={styles.colHeader} onClick={() => handleSort('dueDate')}>
-            Frist <SortIcon col="dueDate" />
-          </button>
-          <div className={styles.colHeader}>Etiketter</div>
-          <button className={styles.colHeader} onClick={() => handleSort('updated')}>
-            Oppdatert <SortIcon col="updated" />
-          </button>
-        </div>
-
-        {sorted.map((issue) => (
-          <div key={issue.key} className={styles.row} onClick={() => onIssueClick(issue)}>
-            <div className={styles.colType}>
-              {issue.issueType.iconUrl && (
-                <img
-                  src={issue.issueType.iconUrl}
-                  alt={issue.issueType.name}
-                  className={styles.typeIcon}
-                  title={issue.issueType.name}
-                />
-              )}
-            </div>
-            <div className={styles.colData}>
-              <a
-                href={`${jiraBaseUrl}/browse/${issue.key}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.issueKey}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {issue.key}
-              </a>
-            </div>
-            <div className={`${styles.colData} ${styles.colSummary}`}>
-              <span className={styles.summary}>{issue.summary}</span>
-            </div>
-            <div className={styles.colData}>
-              <Badge
-                variant={
-                  issue.status.category === 'done'
-                    ? 'success'
-                    : issue.status.category === 'indeterminate'
-                    ? 'primary'
-                    : 'default'
-                }
-                size="sm"
-              >
-                {issue.status.name}
-              </Badge>
-            </div>
-            <div className={styles.colData}>
-              {issue.priority && (
-                <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
-                  {issue.priority.name}
-                </Badge>
-              )}
-            </div>
-            <div className={styles.colData}>
-              {issue.assignee && (
-                <div className={styles.assignee}>
-                  {issue.assignee.avatarUrl ? (
-                    <img
-                      src={issue.assignee.avatarUrl}
-                      alt={issue.assignee.displayName}
-                      className={styles.avatar}
-                    />
-                  ) : (
-                    <div className={styles.avatarInitial}>
-                      {issue.assignee.displayName.charAt(0)}
-                    </div>
-                  )}
-                  <span className={styles.assigneeName}>{issue.assignee.displayName}</span>
-                </div>
-              )}
-            </div>
-            <div className={styles.colData}>
-              {issue.dueDate && (
-                <span
-                  className={
-                    new Date(issue.dueDate) < new Date() && issue.status.category !== 'done'
-                      ? styles.overdue
-                      : styles.dueDate
-                  }
-                >
-                  {new Date(issue.dueDate).toLocaleDateString('nb-NO')}
-                </span>
-              )}
-            </div>
-            <div className={styles.colData}>
-              {issue.labels && issue.labels.length > 0 && (
-                <div className={styles.labels}>
-                  {issue.labels.slice(0, 2).map((label) => (
-                    <span key={label} className={styles.label}>{label}</span>
-                  ))}
-                  {issue.labels.length > 2 && (
-                    <span className={styles.labelMore}>+{issue.labels.length - 2}</span>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className={styles.colData}>
-              <span className={styles.updated}>
-                {new Date(issue.updated).toLocaleDateString('nb-NO', {
-                  day: 'numeric',
-                  month: 'short',
-                })}
-              </span>
-            </div>
+    <>
+      <div className={styles.wrapper}>
+        <div className={styles.table}>
+          <div className={styles.headerRow}>
+            <div className={styles.colType} />
+            <button className={styles.colHeader} onClick={() => handleSort('key')}>
+              Nøkkel <SortIcon col="key" />
+            </button>
+            <button className={`${styles.colHeader} ${styles.colSummaryHeader}`} onClick={() => handleSort('summary')}>
+              Tittel <SortIcon col="summary" />
+            </button>
+            <button className={styles.colHeader} onClick={() => handleSort('status')}>
+              Status <SortIcon col="status" />
+            </button>
+            <button className={styles.colHeader} onClick={() => handleSort('priority')}>
+              Prioritet <SortIcon col="priority" />
+            </button>
+            <button className={styles.colHeader} onClick={() => handleSort('assignee')}>
+              Tildelt <SortIcon col="assignee" />
+            </button>
+            <button className={styles.colHeader} onClick={() => handleSort('dueDate')}>
+              Frist <SortIcon col="dueDate" />
+            </button>
+            <div className={styles.colHeader}>Etiketter</div>
+            <button className={styles.colHeader} onClick={() => handleSort('updated')}>
+              Oppdatert <SortIcon col="updated" />
+            </button>
+            <div className={styles.colType} />
           </div>
-        ))}
+
+          {sorted.map((issue) => (
+            <div key={issue.key} className={styles.row} onClick={() => onIssueClick(issue)}>
+              <div className={styles.colType}>
+                {issue.issueType.iconUrl && (
+                  <img
+                    src={issue.issueType.iconUrl}
+                    alt={issue.issueType.name}
+                    className={styles.typeIcon}
+                    title={issue.issueType.name}
+                  />
+                )}
+              </div>
+              <div className={styles.colData}>
+                <a
+                  href={`${jiraBaseUrl}/browse/${issue.key}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.issueKey}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {issue.key}
+                </a>
+              </div>
+              <div className={`${styles.colData} ${styles.colSummary}`}>
+                <span className={styles.summary}>{issue.summary}</span>
+              </div>
+              <div className={styles.colData}>
+                <Badge
+                  variant={
+                    issue.status.category === 'done'
+                      ? 'success'
+                      : issue.status.category === 'indeterminate'
+                      ? 'primary'
+                      : 'default'
+                  }
+                  size="sm"
+                >
+                  {issue.status.name}
+                </Badge>
+              </div>
+              <div className={styles.colData}>
+                {issue.priority && (
+                  <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
+                    {issue.priority.name}
+                  </Badge>
+                )}
+              </div>
+              <div className={styles.colData}>
+                {issue.assignee && (
+                  <div className={styles.assignee}>
+                    {issue.assignee.avatarUrl ? (
+                      <img
+                        src={issue.assignee.avatarUrl}
+                        alt={issue.assignee.displayName}
+                        className={styles.avatar}
+                      />
+                    ) : (
+                      <div className={styles.avatarInitial}>
+                        {issue.assignee.displayName.charAt(0)}
+                      </div>
+                    )}
+                    <span className={styles.assigneeName}>{issue.assignee.displayName}</span>
+                  </div>
+                )}
+              </div>
+              <div className={styles.colData}>
+                {issue.dueDate && (
+                  <span
+                    className={
+                      new Date(issue.dueDate) < new Date() && issue.status.category !== 'done'
+                        ? styles.overdue
+                        : styles.dueDate
+                    }
+                  >
+                    {new Date(issue.dueDate).toLocaleDateString('nb-NO')}
+                  </span>
+                )}
+              </div>
+              <div className={styles.colData}>
+                {issue.labels && issue.labels.length > 0 && (
+                  <div className={styles.labels}>
+                    {issue.labels.slice(0, 2).map((label) => (
+                      <span key={label} className={styles.label}>{label}</span>
+                    ))}
+                    {issue.labels.length > 2 && (
+                      <span className={styles.labelMore}>+{issue.labels.length - 2}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className={styles.colData}>
+                <span className={styles.updated}>
+                  {new Date(issue.updated).toLocaleDateString('nb-NO', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                </span>
+              </div>
+              <div className={styles.colData}>
+                <button
+                  className={styles.todoAction}
+                  title="Opprett todo"
+                  onClick={(e) => { e.stopPropagation(); setCreateTodoFor(issue); }}
+                >
+                  <CheckSquare size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {createTodoFor && (
+        <CreateTodoModal
+          issue={createTodoFor}
+          onClose={() => setCreateTodoFor(null)}
+        />
+      )}
+    </>
   );
 }

@@ -166,6 +166,12 @@ export interface ConfluenceSpace {
 }
 
 // Private Todo Types
+export interface TodoSubtask {
+  id: string;
+  content: string;
+  completed: boolean;
+}
+
 export interface TodoItem {
   id: string;
   content: string;
@@ -173,6 +179,9 @@ export interface TodoItem {
   linkedJiraIssue?: string; // Jira issue key
   priority: 'low' | 'medium' | 'high';
   dueDate?: string;
+  notes?: string;
+  tags?: string[];
+  subtasks?: TodoSubtask[];
   createdAt: string;
   updatedAt: string;
 }

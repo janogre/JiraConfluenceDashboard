@@ -54,6 +54,15 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Se
 const ROW_HEIGHT = 40;
 const SECTION_ROW_HEIGHT = 32;
 
+type ZoomLevel = 'month' | 'quarter' | 'halfyear' | 'year';
+
+const ZOOM_OPTIONS: { key: ZoomLevel; label: string; before: number; after: number }[] = [
+  { key: 'month',    label: 'Måned',  before: 0, after: 0 },
+  { key: 'quarter',  label: 'Kvartal', before: 0, after: 2 },
+  { key: 'halfyear', label: 'Halvår',  before: 1, after: 4 },
+  { key: 'year',     label: 'År',      before: 2, after: 9 },
+];
+
 interface Row {
   issue: JiraIssue;
   isEpic: boolean;
@@ -64,8 +73,11 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
   const today = new Date();
 
   const [windowOffset, setWindowOffset] = useState(0);
-  const windowStart = startOfMonth(addMonths(today, -2 + windowOffset));
-  const windowEnd = startOfMonth(addMonths(today, 5 + windowOffset));
+  const [zoom, setZoom] = useState<ZoomLevel>('halfyear');
+
+  const zoomConfig = ZOOM_OPTIONS.find((z) => z.key === zoom)!;
+  const windowStart = startOfMonth(addMonths(today, -zoomConfig.before + windowOffset));
+  const windowEnd = startOfMonth(addMonths(today, zoomConfig.after + windowOffset));
   const windowEndExclusive = addMonths(windowEnd, 1);
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
   const windowDays = (windowEndExclusive.getTime() - windowStart.getTime()) / MS_PER_DAY;
@@ -183,6 +195,17 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
           {MONTH_NAMES[windowStart.getMonth()]} {windowStart.getFullYear()} – {MONTH_NAMES[windowEnd.getMonth()]} {windowEnd.getFullYear()}
         </span>
         <button className={styles.navButton} onClick={() => setWindowOffset((o) => o + 1)}>Neste &#8594;</button>
+        <div className={styles.zoomGroup}>
+          {ZOOM_OPTIONS.map((z) => (
+            <button
+              key={z.key}
+              className={`${styles.zoomButton} ${zoom === z.key ? styles.zoomActive : ''}`}
+              onClick={() => { setZoom(z.key); setWindowOffset(0); }}
+            >
+              {z.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className={styles.gridContainer}>
