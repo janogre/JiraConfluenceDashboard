@@ -1,306 +1,278 @@
 import { useState } from 'react';
-import {
-  Plus,
-  Check,
-  Trash2,
-  Link as LinkIcon,
-  Calendar,
-  Flag,
-  Edit2,
-  ChevronDown,
-  ChevronRight,
-} from 'lucide-react';
-import { Card, CardHeader, CardContent, Button, Input, Modal, Badge } from '../../components/common';
+import { Plus, ChevronDown, ChevronRight, Search, Filter } from 'lucide-react';
 import { useTodoStore } from '../../store/todoStore';
+import { TodoRow } from './TodoRow';
 import type { TodoItem } from '../../types';
 import styles from './Todos.module.css';
 
-export function Todos() {
-  const {
-    addTodo,
-    updateTodo,
-    deleteTodo,
-    toggleTodo,
-    getActiveTodos,
-    getCompletedTodos,
-  } = useTodoStore();
+type SortKey = 'priority' | 'dueDate' | 'createdAt';
 
-  const [newTodoContent, setNewTodoContent] = useState('');
-  const [newTodoPriority, setNewTodoPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function tomorrowISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
+}
+
+function startOfTodayMs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function endOfWeekMs() {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  d.setDate(d.getDate() + 7);
+  return d.getTime();
+}
+
+export function Todos() {
+  const { addTodo, getActiveTodos, getCompletedTodos } = useTodoStore();
+
+  const [newContent, setNewContent] = useState('');
+  const [newPriority, setNewPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [newDueDate, setNewDueDate] = useState<string>('');
   const [showCompleted, setShowCompleted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterJiraOnly, setFilterJiraOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('priority');
 
   const activeTodos = getActiveTodos();
   const completedTodos = getCompletedTodos();
 
-  const handleAddTodo = () => {
-    if (!newTodoContent.trim()) return;
-
+  const handleAdd = () => {
+    if (!newContent.trim()) return;
     addTodo({
-      content: newTodoContent.trim(),
-      priority: newTodoPriority,
+      content: newContent.trim(),
+      priority: newPriority,
+      dueDate: newDueDate ? new Date(newDueDate).toISOString() : undefined,
     });
-
-    setNewTodoContent('');
-    setNewTodoPriority('medium');
+    setNewContent('');
+    setNewPriority('medium');
+    setNewDueDate('');
   };
 
-  const handleUpdateTodo = () => {
-    if (!editingTodo) return;
-    updateTodo(editingTodo.id, editingTodo);
-    setEditingTodo(null);
-  };
+  // Filter
+  let filtered = activeTodos;
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(
+      (t) => t.content.toLowerCase().includes(q) || t.linkedJiraIssue?.toLowerCase().includes(q)
+    );
+  }
+  if (filterJiraOnly) {
+    filtered = filtered.filter((t) => !!t.linkedJiraIssue);
+  }
 
-  const getPriorityVariant = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'danger';
-      case 'medium':
-        return 'warning';
-      default:
-        return 'default';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
+  // Sort
+  const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+  if (sortKey === 'priority') {
+    filtered = [...filtered].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+  } else if (sortKey === 'dueDate') {
+    filtered = [...filtered].sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return 0;
     });
-  };
+  } else if (sortKey === 'createdAt') {
+    filtered = [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
 
-  const isOverdue = (dueDate?: string) => {
-    if (!dueDate) return false;
-    return new Date(dueDate) < new Date();
-  };
+  // Group into time buckets
+  const todayStart = startOfTodayMs();
+  const weekEnd = endOfWeekMs();
+
+  const todayGroup = filtered.filter((t) => {
+    if (!t.dueDate) return t.priority === 'high';
+    const ms = new Date(t.dueDate).getTime();
+    return ms <= todayStart + 86_400_000 - 1; // up to end of today (including overdue)
+  });
+
+  const weekGroup = filtered.filter((t) => {
+    if (!t.dueDate) return false;
+    const ms = new Date(t.dueDate).getTime();
+    return ms > todayStart + 86_400_000 - 1 && ms <= weekEnd;
+  });
+
+  const laterGroup = filtered.filter((t) => {
+    if (!t.dueDate) return t.priority !== 'high';
+    const ms = new Date(t.dueDate).getTime();
+    return ms > weekEnd;
+  });
 
   return (
     <div className={styles.container}>
-      {/* Add Todo Section */}
-      <Card>
-        <CardHeader>
-          <h3>Add New Todo</h3>
-        </CardHeader>
-        <CardContent>
-          <div className={styles.addTodoForm}>
-            <Input
-              placeholder="What needs to be done?"
-              value={newTodoContent}
-              onChange={(e) => setNewTodoContent(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddTodo();
-              }}
-              className={styles.todoInput}
-            />
-            <select
-              value={newTodoPriority}
-              onChange={(e) => setNewTodoPriority(e.target.value as 'low' | 'medium' | 'high')}
-              className={styles.prioritySelect}
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-            <Button onClick={handleAddTodo} icon={<Plus size={16} />}>
-              Add
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Active Todos */}
-      <Card>
-        <CardHeader>
-          <div className={styles.cardHeaderContent}>
-            <h3>Active ({activeTodos.length})</h3>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {activeTodos.length === 0 ? (
-            <p className={styles.empty}>No active todos. Add one above!</p>
-          ) : (
-            <ul className={styles.todoList}>
-              {activeTodos.map((todo) => (
-                <li key={todo.id} className={styles.todoItem}>
-                  <button
-                    className={styles.checkButton}
-                    onClick={() => toggleTodo(todo.id)}
-                  >
-                    <div className={styles.checkbox} />
-                  </button>
-
-                  <div className={styles.todoContent}>
-                    <span className={styles.todoText}>{todo.content}</span>
-                    <div className={styles.todoMeta}>
-                      <Badge
-                        variant={getPriorityVariant(todo.priority)}
-                        size="sm"
-                      >
-                        <Flag size={10} />
-                        {todo.priority}
-                      </Badge>
-                      {todo.dueDate && (
-                        <Badge
-                          variant={isOverdue(todo.dueDate) ? 'danger' : 'default'}
-                          size="sm"
-                        >
-                          <Calendar size={10} />
-                          {formatDate(todo.dueDate)}
-                        </Badge>
-                      )}
-                      {todo.linkedJiraIssue && (
-                        <Badge variant="primary" size="sm">
-                          <LinkIcon size={10} />
-                          {todo.linkedJiraIssue}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={styles.todoActions}>
-                    <button
-                      className={styles.actionButton}
-                      onClick={() => setEditingTodo(todo)}
-                      title="Rediger"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      className={`${styles.actionButton} ${styles.deleteAction}`}
-                      onClick={() => deleteTodo(todo.id)}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Completed Todos */}
-      <Card>
-        <CardHeader>
-          <button
-            className={styles.expandButton}
-            onClick={() => setShowCompleted(!showCompleted)}
+      {/* Quick-add bar */}
+      <div className={styles.quickAdd}>
+        <div className={styles.quickAddInput}>
+          <Plus size={16} className={styles.quickAddIcon} />
+          <input
+            className={styles.quickAddField}
+            placeholder="Legg til ny oppgave... (Enter for å legge til)"
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+          />
+        </div>
+        <div className={styles.quickAddOptions}>
+          <select
+            className={styles.prioritySelect}
+            value={newPriority}
+            onChange={(e) => setNewPriority(e.target.value as 'low' | 'medium' | 'high')}
           >
-            {showCompleted ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-            <h3>Completed ({completedTodos.length})</h3>
+            <option value="low">Lav</option>
+            <option value="medium">Middels</option>
+            <option value="high">Høy</option>
+          </select>
+          <button
+            className={`${styles.dateBtn} ${newDueDate === todayISO() ? styles.dateBtnActive : ''}`}
+            onClick={() => setNewDueDate(newDueDate === todayISO() ? '' : todayISO())}
+          >
+            I dag
           </button>
-        </CardHeader>
-        {showCompleted && (
-          <CardContent>
-            {completedTodos.length === 0 ? (
-              <p className={styles.empty}>No completed todos yet.</p>
-            ) : (
-              <ul className={styles.todoList}>
-                {completedTodos.map((todo) => (
-                  <li key={todo.id} className={`${styles.todoItem} ${styles.completed}`}>
-                    <button
-                      className={styles.checkButton}
-                      onClick={() => toggleTodo(todo.id)}
-                    >
-                      <div className={`${styles.checkbox} ${styles.checked}`}>
-                        <Check size={12} />
-                      </div>
-                    </button>
+          <button
+            className={`${styles.dateBtn} ${newDueDate === tomorrowISO() ? styles.dateBtnActive : ''}`}
+            onClick={() => setNewDueDate(newDueDate === tomorrowISO() ? '' : tomorrowISO())}
+          >
+            I morgen
+          </button>
+          <input
+            type="date"
+            className={styles.dateInput}
+            value={newDueDate}
+            onChange={(e) => setNewDueDate(e.target.value)}
+            title="Velg dato"
+          />
+          <button className={styles.addBtn} onClick={handleAdd} disabled={!newContent.trim()}>
+            Legg til
+          </button>
+        </div>
+      </div>
 
-                    <div className={styles.todoContent}>
-                      <span className={styles.todoText}>{todo.content}</span>
-                    </div>
+      {/* Filter / search bar */}
+      <div className={styles.filterBar}>
+        <div className={styles.searchRow}>
+          <Search size={14} className={styles.searchIcon} />
+          <input
+            className={styles.searchInput}
+            placeholder="Søk i oppgaver..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <label className={`${styles.filterToggle} ${filterJiraOnly ? styles.filterToggleActive : ''}`}>
+          <input
+            type="checkbox"
+            checked={filterJiraOnly}
+            onChange={(e) => setFilterJiraOnly(e.target.checked)}
+            className={styles.hiddenCheckbox}
+          />
+          <Filter size={12} />
+          Kun med Jira
+        </label>
+        <div className={styles.sortRow}>
+          <span className={styles.sortLabel}>Sorter:</span>
+          {(['priority', 'dueDate', 'createdAt'] as SortKey[]).map((key) => (
+            <button
+              key={key}
+              className={`${styles.sortBtn} ${sortKey === key ? styles.sortBtnActive : ''}`}
+              onClick={() => setSortKey(key)}
+            >
+              {key === 'priority' ? 'Prioritet' : key === 'dueDate' ? 'Frist' : 'Opprettet'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-                    <div className={styles.todoActions}>
-                      <button
-                        className={`${styles.actionButton} ${styles.deleteAction}`}
-                        onClick={() => deleteTodo(todo.id)}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        )}
-      </Card>
+      {/* Today group */}
+      <GroupSection
+        icon="📅"
+        title="I dag"
+        count={todayGroup.length}
+        todos={todayGroup}
+        defaultOpen
+      />
 
-      {/* Edit Todo Modal */}
-      {editingTodo && (
-        <Modal
-          isOpen={!!editingTodo}
-          onClose={() => setEditingTodo(null)}
-          title="Edit Todo"
-          size="sm"
+      {/* This week group */}
+      <GroupSection
+        icon="📆"
+        title="Denne uken"
+        count={weekGroup.length}
+        todos={weekGroup}
+        defaultOpen
+      />
+
+      {/* Later group */}
+      <GroupSection
+        icon="🗂"
+        title="Senere"
+        count={laterGroup.length}
+        todos={laterGroup}
+        defaultOpen={false}
+      />
+
+      {/* Completed */}
+      <div className={styles.group}>
+        <button
+          className={styles.groupHeader}
+          onClick={() => setShowCompleted((v) => !v)}
         >
-          <div className={styles.editForm}>
-            <Input
-              label="Content"
-              value={editingTodo.content}
-              onChange={(e) =>
-                setEditingTodo({ ...editingTodo, content: e.target.value })
-              }
-            />
-
-            <div className={styles.formField}>
-              <label className={styles.formLabel}>Priority</label>
-              <select
-                value={editingTodo.priority}
-                onChange={(e) =>
-                  setEditingTodo({
-                    ...editingTodo,
-                    priority: e.target.value as 'low' | 'medium' | 'high',
-                  })
-                }
-                className={styles.prioritySelect}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-
-            <Input
-              label="Due Date"
-              type="date"
-              value={editingTodo.dueDate?.split('T')[0] || ''}
-              onChange={(e) =>
-                setEditingTodo({
-                  ...editingTodo,
-                  dueDate: e.target.value
-                    ? new Date(e.target.value).toISOString()
-                    : undefined,
-                })
-              }
-            />
-
-            <Input
-              label="Linked Jira Issue"
-              value={editingTodo.linkedJiraIssue || ''}
-              onChange={(e) =>
-                setEditingTodo({
-                  ...editingTodo,
-                  linkedJiraIssue: e.target.value || undefined,
-                })
-              }
-              placeholder="e.g., PROJ-123"
-            />
-
-            <div className={styles.editActions}>
-              <Button onClick={handleUpdateTodo}>Save</Button>
-              <Button variant="ghost" onClick={() => setEditingTodo(null)}>
-                Cancel
-              </Button>
-            </div>
+          <span className={styles.groupIcon}>✓</span>
+          <span className={styles.groupTitle}>Fullført</span>
+          <span className={styles.groupCount}>{completedTodos.length}</span>
+          <span className={styles.chevron}>
+            {showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        </button>
+        {showCompleted && (
+          <div className={styles.groupBody}>
+            {completedTodos.length === 0 ? (
+              <p className={styles.empty}>Ingen fullførte oppgaver.</p>
+            ) : (
+              completedTodos.map((todo) => <TodoRow key={todo.id} todo={todo} />)
+            )}
           </div>
-        </Modal>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
 
+interface GroupSectionProps {
+  icon: string;
+  title: string;
+  count: number;
+  todos: TodoItem[];
+  defaultOpen: boolean;
+}
+
+function GroupSection({ icon, title, count, todos, defaultOpen }: GroupSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className={styles.group}>
+      <button className={styles.groupHeader} onClick={() => setOpen((v) => !v)}>
+        <span className={styles.groupIcon}>{icon}</span>
+        <span className={styles.groupTitle}>{title}</span>
+        <span className={styles.groupCount}>{count}</span>
+        <span className={styles.chevron}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+      </button>
+      {open && (
+        <div className={styles.groupBody}>
+          {todos.length === 0 ? (
+            <p className={styles.empty}>Ingen oppgaver her.</p>
+          ) : (
+            todos.map((todo) => <TodoRow key={todo.id} todo={todo} />)
+          )}
+        </div>
+      )}
     </div>
   );
 }

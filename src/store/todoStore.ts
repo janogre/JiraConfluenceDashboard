@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { TodoItem } from '../types';
+import type { TodoItem, TodoSubtask } from '../types';
 
 interface TodoState {
   todos: TodoItem[];
@@ -13,6 +13,10 @@ interface TodoState {
   getTodosByJiraIssue: (issueKey: string) => TodoItem[];
   getActiveTodos: () => TodoItem[];
   getCompletedTodos: () => TodoItem[];
+  addSubtask: (todoId: string, content: string) => void;
+  toggleSubtask: (todoId: string, subtaskId: string) => void;
+  deleteSubtask: (todoId: string, subtaskId: string) => void;
+  reorderActiveTodos: (fromIndex: number, toIndex: number) => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -89,17 +93,14 @@ export const useTodoStore = create<TodoState>()(
         return get()
           .todos.filter((todo) => !todo.completed)
           .sort((a, b) => {
-            // Sort by priority first (high > medium > low)
             const priorityOrder = { high: 0, medium: 1, low: 2 };
             const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
             if (priorityDiff !== 0) return priorityDiff;
-            // Then by due date
             if (a.dueDate && b.dueDate) {
               return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
             }
             if (a.dueDate) return -1;
             if (b.dueDate) return 1;
-            // Then by creation date
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
       },
@@ -108,6 +109,63 @@ export const useTodoStore = create<TodoState>()(
         return get()
           .todos.filter((todo) => todo.completed)
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      },
+
+      addSubtask: (todoId, content) => {
+        const subtask: TodoSubtask = {
+          id: generateId(),
+          content,
+          completed: false,
+        };
+        set((state) => ({
+          todos: state.todos.map((todo) =>
+            todo.id === todoId
+              ? {
+                  ...todo,
+                  subtasks: [...(todo.subtasks ?? []), subtask],
+                  updatedAt: new Date().toISOString(),
+                }
+              : todo
+          ),
+        }));
+      },
+
+      toggleSubtask: (todoId, subtaskId) =>
+        set((state) => ({
+          todos: state.todos.map((todo) =>
+            todo.id === todoId
+              ? {
+                  ...todo,
+                  subtasks: (todo.subtasks ?? []).map((st) =>
+                    st.id === subtaskId ? { ...st, completed: !st.completed } : st
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
+              : todo
+          ),
+        })),
+
+      deleteSubtask: (todoId, subtaskId) =>
+        set((state) => ({
+          todos: state.todos.map((todo) =>
+            todo.id === todoId
+              ? {
+                  ...todo,
+                  subtasks: (todo.subtasks ?? []).filter((st) => st.id !== subtaskId),
+                  updatedAt: new Date().toISOString(),
+                }
+              : todo
+          ),
+        })),
+
+      reorderActiveTodos: (fromIndex, toIndex) => {
+        const state = get();
+        const active = state.todos.filter((t) => !t.completed);
+        const completed = state.todos.filter((t) => t.completed);
+        const reordered = [...active];
+        const [moved] = reordered.splice(fromIndex, 1);
+        reordered.splice(toIndex, 0, moved);
+        set({ todos: [...reordered, ...completed] });
       },
     }),
     {

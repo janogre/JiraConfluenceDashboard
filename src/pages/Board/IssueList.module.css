@@ -8,7 +8,7 @@
 
 .table {
   display: grid;
-  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 1fr 88px;
+  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 1fr 88px 36px;
   min-width: 860px;
 }
 
@@ -199,3 +199,123 @@
   color: var(--color-text-muted);
   padding: var(--spacing-xl);
 }
+
+/* Todo action button */
+.todoAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.row:hover .todoAction {
+  opacity: 1;
+}
+
+.todoAction:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+/* Create todo form in modal */
+.createForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.formLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.formInput {
+  padding: var(--spacing-sm) 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.formInput:focus { border-color: var(--color-border-focus); }
+
+.formSelect {
+  padding: var(--spacing-sm) 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.formActions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.createBtn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.createBtn:hover:not(:disabled) { opacity: 0.85; }
+.createBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cancelBtn {
+  padding: 7px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.cancelBtn:hover { border-color: var(--color-text-secondary); }
+
+.createdConfirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  color: var(--color-success);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+}
+
+.createdIcon { flex-shrink: 0; }

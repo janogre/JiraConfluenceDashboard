@@ -446,6 +446,14 @@ export async function searchIssues(searchText: string): Promise<JiraIssue[]> {
   return getIssues(undefined, jql);
 }
 
+export async function searchIssuesInProjects(searchText: string, projectKeys: string[]): Promise<JiraIssue[]> {
+  if (projectKeys.length === 0) return [];
+  const escapedText = searchText.replace(/"/g, '\\"');
+  const projectList = projectKeys.map((k) => `"${k}"`).join(', ');
+  const jql = `project in (${projectList}) AND (summary ~ "${escapedText}" OR description ~ "${escapedText}") ORDER BY updated DESC`;
+  return getIssues(undefined, jql);
+}
+
 // Get current user
 export async function getCurrentUser(): Promise<JiraUser> {
   const api = getApi();

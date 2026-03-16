@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown } from 'lucide-react';
+import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown, Search, CheckSquare, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
 import {
@@ -11,8 +11,10 @@ import {
   getTransitions,
   transitionIssue,
   getCurrentUser,
+  searchIssuesInProjects,
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
+import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
 import { Timeline } from './Timeline';
 import { ProjectPulse } from './ProjectPulse';
@@ -45,9 +47,16 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
 export function Board() {
-  const [mode, setMode] = useState<'mine' | 'project' | 'list' | 'timeline' | 'activity' | 'pulse' | 'sprint'>('mine');
+  const [mode, setMode] = useState<'mine' | 'project' | 'list' | 'timeline' | 'activity' | 'pulse' | 'sprint' | 'search'>('mine');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
+  const [todoCreated, setTodoCreated] = useState(false);
+  const [showTodoForm, setShowTodoForm] = useState(false);
+  const [todoPriority, setTodoPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [todoDueDate, setTodoDueDate] = useState('');
+  const { addTodo, getTodosByJiraIssue } = useTodoStore();
   const [showAllDone, setShowAllDone] = useState(false);
   const [starredProjects, setStarredProjects] = useState<Set<string>>(loadStarredProjects);
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
@@ -59,7 +68,6 @@ export function Board() {
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState('');
   const [sortByDueDate, setSortByDueDate] = useState(false);
-  const [timelineShowDone, setTimelineShowDone] = useState(false);
   const [includeDone, setIncludeDone] = useState(false);
   const labelDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -121,6 +129,14 @@ export function Board() {
         (mode === 'list' && !selectedProjectKey) ||
         (!!selectedProjectKey &&
           (mode === 'project' || mode === 'list' || mode === 'timeline' || mode === 'activity' || mode === 'pulse'))),
+  });
+
+  const starredProjectKeys = [...starredProjects];
+
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ['boardSearch', submittedQuery, starredProjectKeys],
+    queryFn: () => searchIssuesInProjects(submittedQuery, starredProjectKeys),
+    enabled: configured && mode === 'search' && submittedQuery.length > 0 && starredProjectKeys.length > 0,
   });
 
   const { data: currentUser } = useQuery({
@@ -316,12 +332,19 @@ export function Board() {
   const matchesLabelFilter = (issue: JiraIssue) =>
     filterLabels.size === 0 || [...filterLabels].every((l) => (issue.labels ?? []).includes(l));
 
-  // Timeline filtering: default hides done issues; priority/assignee/label filters also apply
+  // Timeline filtering: all shared filters apply
   const timelineIssues = displayedIssues.filter((issue) => {
-    if (!timelineShowDone && issue.status.category === 'done') return false;
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
+    if (filterStatus) {
+      if (filterStatus.startsWith('cat:')) {
+        if (issue.status.category !== filterStatus.slice(4)) return false;
+      } else {
+        if (issue.status.name !== filterStatus) return false;
+      }
+    }
+    if (filterIssueType && issue.issueType.name !== filterIssueType) return false;
     return true;
   });
 
@@ -534,7 +557,55 @@ export function Board() {
           >
             Sprint
           </button>
+          <button
+            className={`${styles.modeButton} ${mode === 'search' ? styles.modeButtonActive : ''}`}
+            onClick={() => setMode('search')}
+            title={starredProjects.size === 0 ? 'Stjernemerk prosjekter for å søke i dem' : `Søk i ${starredProjects.size} stjernemerkede prosjekter`}
+          >
+            <Search size={13} />
+            Søk
+          </button>
         </div>
+
+        {mode === 'search' && (
+          <form
+            className={styles.searchForm}
+            onSubmit={(e) => { e.preventDefault(); setSubmittedQuery(searchQuery.trim()); }}
+          >
+            <div className={styles.searchInputWrapper}>
+              <Search size={14} className={styles.searchIcon} />
+              <input
+                type="text"
+                className={styles.searchInput}
+                placeholder={
+                  starredProjects.size === 0
+                    ? 'Stjernemerk prosjekter først…'
+                    : `Søk i ${starredProjects.size} stjernemerkede prosjekter…`
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                disabled={starredProjects.size === 0}
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className={styles.searchClear}
+                  onClick={() => { setSearchQuery(''); setSubmittedQuery(''); }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              className={styles.sortButton}
+              disabled={starredProjects.size === 0 || !searchQuery.trim()}
+            >
+              Søk
+            </button>
+          </form>
+        )}
 
         {(mode === 'project' || mode === 'list' || mode === 'timeline' || mode === 'activity' || mode === 'pulse' || mode === 'sprint') && (
           <div className={styles.projectSelectWrapper}>
@@ -658,7 +729,7 @@ export function Board() {
               </div>
             )}
 
-            {mode === 'list' && availableIssueTypes.length > 0 && (
+            {(mode === 'list' || mode === 'timeline') && availableIssueTypes.length > 0 && (
               <select
                 className={styles.filterSelect}
                 value={filterIssueType}
@@ -672,7 +743,7 @@ export function Board() {
               </select>
             )}
 
-            {mode === 'list' && availableStatuses.length > 0 && (
+            {(mode === 'list' || mode === 'timeline') && availableStatuses.length > 0 && (
               <select
                 className={styles.filterSelect}
                 value={filterStatus}
@@ -704,21 +775,10 @@ export function Board() {
               </button>
             )}
 
-            {mode === 'timeline' && (
-              <button
-                className={`${styles.sortButton} ${timelineShowDone ? styles.sortButtonActive : ''}`}
-                onClick={() => setTimelineShowDone((v) => !v)}
-                title={timelineShowDone ? 'Skjul ferdige saker' : 'Vis ferdige saker'}
-              >
-                {timelineShowDone ? <EyeOff size={14} /> : <Eye size={14} />}
-                Vis ferdige
-              </button>
-            )}
-
-            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || filterIssueType || sortByDueDate || (mode === 'timeline' && timelineShowDone)) && (
+            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || filterIssueType || sortByDueDate) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setFilterIssueType(''); setSortByDueDate(false); setTimelineShowDone(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setFilterIssueType(''); setSortByDueDate(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />
@@ -731,7 +791,9 @@ export function Board() {
           <RefreshCw size={16} />
         </button>
 
-        <span className={styles.issueCount}>{displayedIssues.length} saker totalt</span>
+        {mode !== 'search' && (
+          <span className={styles.issueCount}>{displayedIssues.length} saker totalt</span>
+        )}
       </div>
 
       {/* Feilmelding */}
@@ -744,7 +806,36 @@ export function Board() {
       )}
 
       {/* Board */}
-      {isLoading ? (
+      {mode === 'search' ? (
+        searchLoading ? (
+          <LoadingOverlay message="Søker…" />
+        ) : starredProjects.size === 0 ? (
+          <div className={styles.searchHint}>
+            <Star size={32} />
+            <p>Stjernemerk minst ett prosjekt for å søke i det.</p>
+            <p className={styles.searchHintSub}>Velg et prosjekt i modus <strong>Prosjekt</strong> og trykk stjernen ved siden av velgeren.</p>
+          </div>
+        ) : !submittedQuery ? (
+          <div className={styles.searchHint}>
+            <Search size={32} />
+            <p>Skriv et søkeord og trykk Søk.</p>
+            <p className={styles.searchHintSub}>Søker i sammendrag og beskrivelse i {starredProjects.size} stjernemerkede prosjekter.</p>
+          </div>
+        ) : (searchResults ?? []).length === 0 ? (
+          <div className={styles.searchHint}>
+            <p>Ingen saker funnet for <strong>"{submittedQuery}"</strong>.</p>
+          </div>
+        ) : (
+          <>
+            <p className={styles.searchResultCount}>{searchResults!.length} saker funnet for "{submittedQuery}"</p>
+            <IssueList
+              issues={searchResults!}
+              jiraBaseUrl={jiraBaseUrl}
+              onIssueClick={setSelectedIssue}
+            />
+          </>
+        )
+      ) : isLoading ? (
         <LoadingOverlay message="Laster saker…" />
       ) : mode === 'sprint' && selectedProjectKey ? (
         <SprintView
@@ -888,7 +979,7 @@ export function Board() {
       {selectedIssue && (
         <Modal
           isOpen={!!selectedIssue}
-          onClose={() => setSelectedIssue(null)}
+          onClose={() => { setSelectedIssue(null); setTodoCreated(false); setShowTodoForm(false); }}
           title={selectedIssue.key}
           size="md"
         >
@@ -1029,7 +1120,81 @@ export function Board() {
               </div>
             )}
 
+            {showTodoForm && !todoCreated && (
+              <div className={styles.todoForm}>
+                <div className={styles.todoFormFields}>
+                  <div className={styles.todoFormField}>
+                    <label className={styles.todoFormLabel}>Prioritet</label>
+                    <select
+                      className={styles.todoFormSelect}
+                      value={todoPriority}
+                      onChange={(e) => setTodoPriority(e.target.value as 'low' | 'medium' | 'high')}
+                    >
+                      <option value="low">Lav</option>
+                      <option value="medium">Middels</option>
+                      <option value="high">Høy</option>
+                    </select>
+                  </div>
+                  <div className={styles.todoFormField}>
+                    <label className={styles.todoFormLabel}>Forfallsdato</label>
+                    <input
+                      type="date"
+                      className={styles.todoFormDate}
+                      value={todoDueDate}
+                      onChange={(e) => setTodoDueDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className={styles.modalActions}>
+              {todoCreated ? (
+                <span className={styles.todoCreatedConfirm}>
+                  <Check size={14} /> Todo opprettet!
+                </span>
+              ) : showTodoForm ? (
+                <>
+                  <button
+                    className={styles.createTodoBtn}
+                    onClick={() => {
+                      addTodo({
+                        content: `[${selectedIssue.key}] ${selectedIssue.summary}`,
+                        priority: todoPriority,
+                        dueDate: todoDueDate ? new Date(todoDueDate).toISOString() : undefined,
+                        linkedJiraIssue: selectedIssue.key,
+                      });
+                      setTodoCreated(true);
+                      setShowTodoForm(false);
+                      setTimeout(() => setTodoCreated(false), 2000);
+                    }}
+                  >
+                    <CheckSquare size={14} />
+                    Lagre todo
+                  </button>
+                  <button
+                    className={styles.cancelTodoBtn}
+                    onClick={() => setShowTodoForm(false)}
+                  >
+                    Avbryt
+                  </button>
+                </>
+              ) : (
+                <button
+                  className={styles.createTodoBtn}
+                  onClick={() => {
+                    const p = selectedIssue.priority?.name?.toLowerCase();
+                    setTodoPriority(p === 'high' || p === 'highest' ? 'high' : p === 'medium' ? 'medium' : 'low');
+                    setTodoDueDate(selectedIssue.dueDate?.split('T')[0] ?? '');
+                    setShowTodoForm(true);
+                  }}
+                  disabled={getTodosByJiraIssue(selectedIssue.key).some((t) => !t.completed)}
+                  title={getTodosByJiraIssue(selectedIssue.key).some((t) => !t.completed) ? 'Aktiv todo finnes allerede' : 'Opprett todo'}
+                >
+                  <CheckSquare size={14} />
+                  Opprett todo
+                </button>
+              )}
               <a
                 href={`${jiraBaseUrl}/browse/${selectedIssue.key}`}
                 target="_blank"

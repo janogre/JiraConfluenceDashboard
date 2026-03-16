@@ -611,6 +611,91 @@
   gap: 4px;
 }
 
+/* Search */
+.searchForm {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 240px;
+  max-width: 480px;
+}
+
+.searchInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 6px var(--spacing-sm) 6px calc(var(--spacing-sm) * 2 + 14px);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+  border-color: var(--color-primary);
+}
+
+.searchInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.searchClear {
+  position: absolute;
+  right: var(--spacing-xs);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.searchClear:hover {
+  color: var(--color-text-primary);
+}
+
+.searchHint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  height: 240px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.searchHintSub {
+  font-size: var(--font-size-sm);
+  opacity: 0.75;
+}
+
+.searchResultCount {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  margin-bottom: var(--spacing-xs);
+}
+
 /* Not configured */
 .notConfigured {
   display: flex;
@@ -691,9 +776,109 @@
 
 .modalActions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--spacing-sm);
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border);
+}
+
+.createTodoBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.createTodoBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.createTodoBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.todoCreatedConfirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--color-success);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.cancelTodoBtn {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.cancelTodoBtn:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.todoForm {
+  padding: var(--spacing-md);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-sm);
+}
+
+.todoFormFields {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.todoFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todoFormLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.todoFormSelect,
+.todoFormDate {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.todoFormSelect:focus,
+.todoFormDate:focus {
+  border-color: var(--color-border-focus);
 }
 
 .openInJiraBtn {
