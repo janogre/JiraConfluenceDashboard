@@ -6,6 +6,58 @@
   margin: 0 auto;
 }
 
+/* Tab navigation */
+.tabNav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: var(--spacing-md);
+}
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.tabBtn:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.tabBtnActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+.tabCount {
+  font-size: var(--font-size-xs);
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.tabBtnActive .tabCount {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+}
+
+
 /* Quick-add bar */
 .quickAdd {
   background: var(--color-bg-primary);
@@ -274,4 +326,236 @@
   color: var(--color-text-muted);
   padding: var(--spacing-lg);
   font-size: var(--font-size-sm);
+}
+
+/* ── Eksterne portaler ──────────────────────────────────────────────────────── */
+
+.portalList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.portalAddBar {
+  margin-bottom: var(--spacing-sm);
+}
+
+.portalNewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.portalNewBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.portalAddForm,
+.portalEditForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+
+.portalInput {
+  padding: 7px var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  width: 100%;
+}
+
+.portalInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.portalTextarea {
+  padding: 7px var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  resize: vertical;
+  width: 100%;
+}
+
+.portalTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.portalEditActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.portalSaveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.portalSaveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.portalCancelBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.portalCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  transition: border-color 0.15s;
+}
+
+.portalCard:hover {
+  border-color: var(--color-primary);
+}
+
+.portalIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.portalBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portalTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.portalTitle {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.portalTitle:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.portalExternalIcon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.portalDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.portalUrl {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portalActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.portalActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.portalActionBtn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.portalDeleteBtn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.portalEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  color: var(--color-text-muted);
+  text-align: center;
 }

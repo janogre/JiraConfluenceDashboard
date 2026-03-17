@@ -10,7 +10,6 @@ import { Risk } from './pages/Risk/Risk';
 import { Digest } from './pages/Digest/Digest';
 import { TeamCalendar } from './pages/Calendar/Calendar';
 import { MyMetrics } from './pages/MyMetrics/MyMetrics';
-import { Microsoft } from './pages/Microsoft/Microsoft';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -37,7 +36,6 @@ function App() {
             <Route path="digest" element={<Digest />} />
             <Route path="calendar" element={<TeamCalendar />} />
             <Route path="my-metrics" element={<MyMetrics />} />
-            <Route path="microsoft" element={<Microsoft />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -164,6 +164,20 @@ export function TodoRow({ todo }: TodoRowProps) {
                 </Badge>
               </a>
             )}
+            {todo.linkedConfluenceTask && (
+              <a
+                href={todo.linkedConfluenceTask.pageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={styles.jiraLink}
+              >
+                <Badge variant="default" size="sm">
+                  <LinkIcon size={10} />
+                  {todo.linkedConfluenceTask.pageTitle}
+                </Badge>
+              </a>
+            )}
             {subtasks.length > 0 && (
               <Badge variant="default" size="sm">
                 {completedSubtasks}/{subtasks.length}
@@ -283,8 +297,8 @@ export function TodoRow({ todo }: TodoRowProps) {
             </div>
           </div>
 
-          {/* Jira link */}
-          <div className={styles.section}>
+          {/* Jira link – skjules for Confluence-koblede oppgaver */}
+          {!todo.linkedConfluenceTask && <div className={styles.section}>
             <label className={styles.sectionLabel}>Jira-kobling</label>
             {todo.linkedJiraIssue ? (
               <div className={styles.jiraRow}>
@@ -309,7 +323,7 @@ export function TodoRow({ todo }: TodoRowProps) {
                 <LinkIcon size={14} /> Koble til Jira-issue
               </button>
             )}
-          </div>
+          </div>}
 
           {/* Subtasks */}
           <div className={styles.section}>

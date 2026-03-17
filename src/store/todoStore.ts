@@ -11,6 +11,7 @@ interface TodoState {
   linkToJiraIssue: (todoId: string, issueKey: string) => void;
   unlinkFromJiraIssue: (todoId: string) => void;
   getTodosByJiraIssue: (issueKey: string) => TodoItem[];
+  getTodosByConfluenceTask: (globalId: number) => TodoItem[];
   getActiveTodos: () => TodoItem[];
   getCompletedTodos: () => TodoItem[];
   addSubtask: (todoId: string, content: string) => void;
@@ -87,6 +88,10 @@ export const useTodoStore = create<TodoState>()(
 
       getTodosByJiraIssue: (issueKey) => {
         return get().todos.filter((todo) => todo.linkedJiraIssue === issueKey);
+      },
+
+      getTodosByConfluenceTask: (globalId) => {
+        return get().todos.filter((todo) => todo.linkedConfluenceTask?.globalId === globalId);
       },
 
       getActiveTodos: () => {

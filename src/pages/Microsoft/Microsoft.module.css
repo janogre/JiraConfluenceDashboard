@@ -135,7 +135,7 @@
 /* Task row */
 .taskRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--spacing-sm);
   padding: 10px var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
@@ -158,10 +158,45 @@
   flex-shrink: 0;
 }
 
-.taskTitle {
+.taskMain {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.taskTitle {
   font-size: var(--font-size-md);
   color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.taskPlanMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.taskPlanBadge,
+.taskBucketBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--font-size-xs, 11px);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.taskPlanBadge {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+
+.taskBucketBadge {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .taskBadges {

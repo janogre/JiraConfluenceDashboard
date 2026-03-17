@@ -165,6 +165,21 @@ export interface ConfluenceSpace {
   url: string;
 }
 
+export interface ConfluenceTask {
+  globalId: number;
+  id: number;
+  pageId: string;
+  pageTitle: string;
+  pageUrl: string;
+  spaceKey: string;
+  body: string;
+  status: 'complete' | 'incomplete';
+  createdDate: number;
+  dueDate?: number;
+  creator?: { displayName: string; accountId?: string };
+  assignee?: { displayName: string; accountId?: string };
+}
+
 // Private Todo Types
 export interface TodoSubtask {
   id: string;
@@ -172,11 +187,19 @@ export interface TodoSubtask {
   completed: boolean;
 }
 
+export interface LinkedConfluenceTask {
+  globalId: number;
+  body: string;
+  pageTitle: string;
+  pageUrl: string;
+}
+
 export interface TodoItem {
   id: string;
   content: string;
   completed: boolean;
   linkedJiraIssue?: string; // Jira issue key
+  linkedConfluenceTask?: LinkedConfluenceTask;
   priority: 'low' | 'medium' | 'high';
   dueDate?: string;
   notes?: string;
@@ -206,6 +229,14 @@ export interface AbsenceEntry {
   endDate: string;
   type: AbsenceType;
   note?: string;
+}
+
+export interface ExternalPortal {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+  createdAt: string;
 }
 
 // API Configuration

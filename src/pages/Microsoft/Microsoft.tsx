@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Layers, FolderKanban } from 'lucide-react';
 import { Badge } from '../../components/common';
 import styles from './Microsoft.module.css';
 
@@ -12,18 +12,18 @@ const TODO_LISTS = [
     id: 'work',
     name: 'Arbeidsoppgaver',
     tasks: [
-      { id: 't1', title: 'Ferdigstille kravspesifikasjon', priority: 'high' as const, dueDate: TODAY },
-      { id: 't2', title: 'Møte med Telia om NNI', priority: 'medium' as const, dueDate: '2026-03-18' },
-      { id: 't3', title: 'Kodegjennomgang sprint 14', priority: 'low' as const, dueDate: '2026-03-20' },
-      { id: 't4', title: 'Oppdatere dokumentasjon', priority: 'low' as const, dueDate: undefined },
+      { id: 't1', title: 'Ferdigstille kravspesifikasjon', priority: 'high' as const, dueDate: TODAY,          plan: 'Digitaliseringsprosjekt', bucket: 'Pågående' },
+      { id: 't2', title: 'Møte med Telia om NNI',          priority: 'medium' as const, dueDate: '2026-03-18', plan: undefined,                   bucket: undefined },
+      { id: 't3', title: 'Kodegjennomgang sprint 14',      priority: 'low' as const,    dueDate: '2026-03-20', plan: 'Digitaliseringsprosjekt', bucket: 'Til review' },
+      { id: 't4', title: 'Oppdatere dokumentasjon',        priority: 'low' as const,    dueDate: undefined,    plan: undefined,                   bucket: undefined },
     ],
   },
   {
     id: 'private',
     name: 'Privat',
     tasks: [
-      { id: 't5', title: 'Bestille flybilletter', priority: 'medium' as const, dueDate: '2026-03-25' },
-      { id: 't6', title: 'Tannlegetime', priority: 'low' as const, dueDate: undefined },
+      { id: 't5', title: 'Bestille flybilletter', priority: 'medium' as const, dueDate: '2026-03-25', plan: undefined, bucket: undefined },
+      { id: 't6', title: 'Tannlegetime',          priority: 'low' as const,    dueDate: undefined,    plan: undefined, bucket: undefined },
     ],
   },
 ];
@@ -131,7 +131,25 @@ function TodoTaskRow({ task }: { task: typeof TODO_LISTS[0]['tasks'][0] }) {
   return (
     <div className={styles.taskRow}>
       <span className={styles.taskCircle} />
-      <span className={styles.taskTitle}>{task.title}</span>
+      <div className={styles.taskMain}>
+        <span className={styles.taskTitle}>{task.title}</span>
+        {(task.plan || task.bucket) && (
+          <div className={styles.taskPlanMeta}>
+            {task.plan && (
+              <span className={styles.taskPlanBadge}>
+                <Layers size={11} />
+                {task.plan}
+              </span>
+            )}
+            {task.bucket && (
+              <span className={styles.taskBucketBadge}>
+                <FolderKanban size={11} />
+                {task.bucket}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
       <div className={styles.taskBadges}>
         <Badge variant={PRIORITY_VARIANTS[task.priority]} size="sm">
           {PRIORITY_LABELS[task.priority]}

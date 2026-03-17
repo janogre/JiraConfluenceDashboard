@@ -12,8 +12,13 @@ import {
   Loader2,
   Star,
   User,
+  CheckSquare,
+  Check,
+  Plus,
 } from 'lucide-react';
-import { Card, CardContent, Input, LoadingOverlay } from '../../components/common';
+import { Card, CardContent, Input, LoadingOverlay, Modal } from '../../components/common';
+import { useTodoStore } from '../../store/todoStore';
+import type { ConfluenceTask } from '../../types';
 import {
   getSpaces,
   getChildPages,
@@ -21,10 +26,101 @@ import {
   searchPages,
   getRecentPages,
   getPagesByAuthor,
+  findPageByTitle,
+  getInlineTasks,
 } from '../../services/confluenceService';
 import { isConfigured } from '../../services/api';
 import type { ConfluencePage, ConfluenceSpace } from '../../types';
 import styles from './Confluence.module.css';
+
+interface CreateTodoFromTaskModalProps {
+  task: ConfluenceTask;
+  onClose: () => void;
+}
+
+function CreateTodoFromTaskModal({ task, onClose }: CreateTodoFromTaskModalProps) {
+  const { addTodo } = useTodoStore();
+  const [content, setContent] = useState(task.body);
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [dueDate, setDueDate] = useState(
+    task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''
+  );
+  const [created, setCreated] = useState(false);
+
+  const handleCreate = () => {
+    addTodo({
+      content: content.trim(),
+      priority,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      linkedConfluenceTask: {
+        globalId: task.globalId,
+        body: task.body,
+        pageTitle: task.pageTitle,
+        pageUrl: task.pageUrl,
+      },
+    });
+    setCreated(true);
+    setTimeout(onClose, 1500);
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Legg til oppgaveliste" size="sm">
+      {created ? (
+        <div className={styles.createdConfirm}>
+          <Check size={20} className={styles.createdIcon} />
+          Lagt til i oppgavelisten!
+        </div>
+      ) : (
+        <div className={styles.createForm}>
+          <div className={styles.createFormMeta}>
+            <FileText size={13} />
+            <a href={task.pageUrl} target="_blank" rel="noopener noreferrer" className={styles.createFormPageLink}>
+              {task.pageTitle}
+            </a>
+          </div>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Innhold</label>
+            <input
+              className={styles.formInput}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Prioritet</label>
+            <select
+              className={styles.formSelect}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+            >
+              <option value="low">Lav</option>
+              <option value="medium">Middels</option>
+              <option value="high">Høy</option>
+            </select>
+          </div>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>Forfallsdato</label>
+            <input
+              type="date"
+              className={styles.formInput}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div className={styles.formActions}>
+            <button className={styles.createBtn} onClick={handleCreate} disabled={!content.trim()}>
+              Legg til
+            </button>
+            <button className={styles.cancelBtn} onClick={onClose}>
+              Avbryt
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 function PageTreeNode({ page }: { page: ConfluencePage }) {
   const [expanded, setExpanded] = useState(false);
@@ -115,7 +211,12 @@ export function Confluence() {
   const [starredKeys, setStarredKeys] = useState<Set<string>>(loadStarred);
   const [treeSearch, setTreeSearch] = useState('');
   const [debouncedTreeSearch, setDebouncedTreeSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'pages' | 'recent' | 'author'>('pages');
+  const [activeTab, setActiveTab] = useState<'pages' | 'recent' | 'author' | 'meetings' | 'tasks'>('pages');
+  const [taskStatus, setTaskStatus] = useState<'incomplete' | 'complete'>('incomplete');
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<string>('');
+  const [taskDueDateFilter, setTaskDueDateFilter] = useState<'all' | 'overdue' | 'week' | 'no-due'>('all');
+  const [createTodoFromTask, setCreateTodoFromTask] = useState<ConfluenceTask | null>(null);
+  const { getTodosByConfluenceTask } = useTodoStore();
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [authorSearch, setAuthorSearch] = useState('');
   const configured = isConfigured();
@@ -199,6 +300,59 @@ export function Confluence() {
     queryFn: () => getPagesByAuthor(selectedAuthorId!, selectedSpace?.key ?? undefined),
     enabled: configured && !!selectedAuthorId && activeTab === 'author' && !isSearching,
   });
+
+  const { data: meetingParent, isLoading: loadingMeetingParent } = useQuery({
+    queryKey: ['confluenceMeetingParent', selectedSpace?.key],
+    queryFn: () => findPageByTitle('Møtenotater', selectedSpace!.key),
+    enabled: configured && !!selectedSpace && activeTab === 'meetings' && !isSearching,
+  });
+
+  const { data: meetingNotes, isLoading: loadingMeetingNotes } = useQuery({
+    queryKey: ['confluenceMeetingNotes', meetingParent?.id],
+    queryFn: () => getChildPages(meetingParent!.id),
+    enabled: configured && !!meetingParent && activeTab === 'meetings' && !isSearching,
+  });
+
+  const { data: inlineTasks = [], isLoading: loadingTasks } = useQuery({
+    queryKey: ['confluenceTasks', selectedSpace?.key, taskStatus],
+    queryFn: () => getInlineTasks(selectedSpace?.key ?? undefined, taskStatus),
+    enabled: configured && activeTab === 'tasks' && !isSearching,
+  });
+
+  const taskAssignees = useMemo(() => {
+    const seen = new Map<string, string>();
+    inlineTasks.forEach((t) => {
+      if (t.assignee?.accountId && !seen.has(t.assignee.accountId)) {
+        seen.set(t.assignee.accountId, t.assignee.displayName);
+      }
+    });
+    return [...seen.entries()].map(([accountId, displayName]) => ({ accountId, displayName }));
+  }, [inlineTasks]);
+
+  const filteredTasks = useMemo(() => {
+    const now = Date.now();
+    const startOfWeek = new Date();
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return inlineTasks.filter((t) => {
+      if (taskAssigneeFilter && t.assignee?.accountId !== taskAssigneeFilter) return false;
+      if (taskDueDateFilter === 'overdue') return t.dueDate != null && t.dueDate < now;
+      if (taskDueDateFilter === 'week') return t.dueDate != null && t.dueDate >= startOfWeek.getTime() && t.dueDate <= endOfWeek.getTime();
+      if (taskDueDateFilter === 'no-due') return t.dueDate == null;
+      return true;
+    });
+  }, [inlineTasks, taskAssigneeFilter, taskDueDateFilter]);
+
+  const sortedMeetingNotes = useMemo(() =>
+    [...(meetingNotes ?? [])].sort(
+      (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+    ),
+    [meetingNotes]
+  );
 
   const uniqueAuthors = useMemo(() => {
     if (!authorPoolPages) return [];
@@ -370,6 +524,20 @@ export function Confluence() {
                 onClick={() => setActiveTab('author')}
               >
                 Etter forfatter
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'meetings' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('meetings')}
+                disabled={!selectedSpace}
+                title={!selectedSpace ? 'Velg et område for å se møtenotater' : undefined}
+              >
+                Møtenotater
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'tasks' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('tasks')}
+              >
+                Handlingselementer
               </button>
             </div>
           )}
@@ -636,8 +804,151 @@ export function Confluence() {
               </div>
             </div>
           )}
+          {/* Tab: Møtenotater */}
+          {!isSearching && activeTab === 'meetings' && (
+            <>
+              {loadingMeetingParent || loadingMeetingNotes ? (
+                <LoadingOverlay message="Laster inn møtenotater..." />
+              ) : !meetingParent ? (
+                <div className={styles.emptyState}>
+                  <FileText size={48} />
+                  <p>Fant ingen side kalt «Møtenotater» i dette området.</p>
+                </div>
+              ) : sortedMeetingNotes.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <FileText size={48} />
+                  <p>Ingen møtenotater funnet.</p>
+                </div>
+              ) : (
+                <div className={styles.recentFeed}>
+                  {sortedMeetingNotes.map((page) => (
+                    <div key={page.id} className={styles.recentFeedItem}>
+                      <FileText size={15} className={styles.treePageIcon} />
+                      <div className={styles.recentItemContent}>
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.recentItemTitle}
+                        >
+                          {page.title}
+                        </a>
+                        <div className={styles.recentItemMeta}>
+                          {page.lastModified && (
+                            <span>
+                              <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                              {formatDate(page.lastModified)}
+                            </span>
+                          )}
+                          {page.lastModifiedBy && (
+                            <>
+                              <span>·</span>
+                              <span>{page.lastModifiedBy.displayName}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <a
+                        href={page.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.treePageLink}
+                        title="Åpne i Confluence"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {/* Tab: Handlingselementer */}
+          {!isSearching && activeTab === 'tasks' && (
+            <>
+              <div className={styles.taskFilterBar}>
+                <button
+                  className={`${styles.taskStatusBtn} ${taskStatus === 'incomplete' ? styles.taskStatusActive : ''}`}
+                  onClick={() => setTaskStatus('incomplete')}
+                >Åpne</button>
+                <button
+                  className={`${styles.taskStatusBtn} ${taskStatus === 'complete' ? styles.taskStatusActive : ''}`}
+                  onClick={() => setTaskStatus('complete')}
+                >Fullført</button>
+                <div className={styles.taskFilterSeparator} />
+                <select
+                  className={styles.taskFilterSelect}
+                  value={taskAssigneeFilter}
+                  onChange={(e) => setTaskAssigneeFilter(e.target.value)}
+                >
+                  <option value="">Alle ansvarlige</option>
+                  {taskAssignees.map((a) => (
+                    <option key={a.accountId} value={a.accountId}>{a.displayName}</option>
+                  ))}
+                </select>
+                <select
+                  className={styles.taskFilterSelect}
+                  value={taskDueDateFilter}
+                  onChange={(e) => setTaskDueDateFilter(e.target.value as typeof taskDueDateFilter)}
+                >
+                  <option value="all">Alle frister</option>
+                  <option value="overdue">Forfalt</option>
+                  <option value="week">Denne uken</option>
+                  <option value="no-due">Uten frist</option>
+                </select>
+              </div>
+              {loadingTasks ? (
+                <LoadingOverlay message="Laster inn handlingselementer..." />
+              ) : filteredTasks.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <CheckSquare size={48} />
+                  <p>{inlineTasks.length === 0 ? 'Ingen handlingselementer funnet.' : 'Ingen treff på valgte filtre.'}</p>
+                </div>
+              ) : (
+                <div className={styles.taskList}>
+                  {filteredTasks.map((task) => {
+                    const alreadyAdded = getTodosByConfluenceTask(task.globalId).length > 0;
+                    return (
+                      <div key={task.globalId} className={styles.taskItem}>
+                        <span className={`${styles.taskStatus} ${task.status === 'complete' ? styles.taskStatusDone : ''}`} />
+                        <button
+                          className={`${styles.taskAddTodoBtn} ${alreadyAdded ? styles.taskAddTodoBtnDone : ''}`}
+                          title={alreadyAdded ? 'Allerede i oppgavelisten' : 'Legg til oppgaveliste'}
+                          onClick={() => !alreadyAdded && setCreateTodoFromTask(task)}
+                        >
+                          {alreadyAdded ? <><Check size={12} /> Lagt til</> : <><Plus size={12} /> Legg til</>}
+                        </button>
+                        <div className={styles.taskBody}>
+                          <span className={styles.taskText}>{task.body}</span>
+                          <div className={styles.taskMeta}>
+                            <a href={task.pageUrl} target="_blank" rel="noopener noreferrer"
+                              className={styles.taskPageLink}>
+                              <FileText size={12} />{task.pageTitle}
+                            </a>
+                            {task.assignee && <span>· {task.assignee.displayName}</span>}
+                            {task.dueDate && (
+                              <span className={task.status === 'incomplete' && task.dueDate < Date.now() ? styles.taskOverdue : undefined}>
+                                · Frist: {new Date(task.dueDate).toLocaleDateString('nb-NO')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
+
+      {createTodoFromTask && (
+        <CreateTodoFromTaskModal
+          task={createTodoFromTask}
+          onClose={() => setCreateTodoFromTask(null)}
+        />
+      )}
     </div>
   );
 }

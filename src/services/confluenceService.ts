@@ -1,5 +1,5 @@
 import { getApi, getConfluenceBaseUrl } from './api';
-import type { ConfluencePage, ConfluenceSpace } from '../types';
+import type { ConfluencePage, ConfluenceSpace, ConfluenceTask } from '../types';
 
 interface ConfluenceApiPage {
   id: string;
@@ -274,6 +274,139 @@ export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
   // Use _links.base from the response (includes /wiki), falling back to baseUrl
   const linkedBase = response.data._links?.base || baseUrl;
   return response.data.results.map((page) => mapPage(page, linkedBase));
+}
+
+export async function findPageByTitle(
+  title: string,
+  spaceKey: string
+): Promise<ConfluencePage | null> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+
+  const cql = `type=page AND title = "${title}" AND space = "${spaceKey}"`;
+
+  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+    `${baseUrl}/wiki/rest/api/content/search`,
+    {
+      params: {
+        cql,
+        limit: 1,
+        expand: 'space,version',
+      },
+    }
+  );
+  const linkedBase = response.data._links?.base || baseUrl;
+  const results = response.data.results;
+  return results.length > 0 ? mapPage(results[0], linkedBase) : null;
+}
+
+// Actual shape returned by /wiki/rest/api/inlinetasks/search
+interface ConfluenceApiTaskRaw {
+  globalId: number;
+  id: number;
+  contentId: number;       // page ID – no title/URL in the task response
+  status: 'complete' | 'incomplete';
+  body: string;            // Confluence storage-format HTML
+  creator?: string;        // raw accountId string
+  assignee?: string;       // raw accountId string
+  createDate: number;
+  dueDate?: number;
+}
+
+function cleanTaskBody(body: string): string {
+  return body
+    .replace(/<ac:link>[\s\S]*?<\/ac:link>/g, '')   // strip user-mention markup
+    .replace(/<time[^>]*\/?>/g, '')                  // strip <time> tags
+    .replace(/<\/time>/g, '')
+    .replace(/<[^>]+>/g, '')                         // strip remaining HTML tags
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export async function getInlineTasks(
+  spaceKey?: string,
+  status: 'complete' | 'incomplete' = 'incomplete',
+  limit = 50
+): Promise<ConfluenceTask[]> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+
+  const params: Record<string, string | number> = { status, limit };
+  if (spaceKey) params.spaceKey = spaceKey;
+
+  const response = await api.get<{ results: ConfluenceApiTaskRaw[] }>(
+    `${baseUrl}/wiki/rest/api/inlinetasks/search`,
+    { params }
+  );
+  const rawTasks = response.data.results;
+  if (rawTasks.length === 0) return [];
+
+  // Collect unique accountIds and contentIds
+  const accountIds = new Set<string>();
+  const contentIds = new Set<string>();
+  rawTasks.forEach((t) => {
+    if (t.assignee) accountIds.add(t.assignee);
+    if (t.creator) accountIds.add(t.creator);
+    contentIds.add(String(t.contentId));
+  });
+
+  // Fetch users and page info in parallel
+  const [usersMap, pagesMap] = await Promise.all([
+    // One request per unique user (typically very few)
+    (async () => {
+      const map = new Map<string, { displayName: string; accountId: string }>();
+      await Promise.all([...accountIds].map(async (accountId) => {
+        try {
+          const res = await api.get<{ accountId: string; displayName: string }>(
+            `${baseUrl}/wiki/rest/api/user`,
+            { params: { accountId } }
+          );
+          if (res.data.displayName) {
+            map.set(accountId, { displayName: res.data.displayName, accountId });
+          }
+        } catch { /* skip unknown user */ }
+      }));
+      return map;
+    })(),
+    // One CQL batch call for all pages
+    (async () => {
+      const map = new Map<string, { title: string; url: string; spaceKey: string }>();
+      try {
+        const cql = `id in (${[...contentIds].join(',')})`;
+        const res = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+          `${baseUrl}/wiki/rest/api/content/search`,
+          { params: { cql, limit: contentIds.size, expand: 'space' } }
+        );
+        const linkedBase = res.data._links?.base || baseUrl;
+        res.data.results.forEach((page) => {
+          map.set(page.id, {
+            title: page.title,
+            url: `${linkedBase}${page._links.webui}`,
+            spaceKey: page.space?.key || '',
+          });
+        });
+      } catch { /* pages stay empty */ }
+      return map;
+    })(),
+  ]);
+
+  return rawTasks.map((t) => {
+    const page = pagesMap.get(String(t.contentId));
+    return {
+      globalId: t.globalId,
+      id: t.id,
+      pageId: String(t.contentId),
+      pageTitle: page?.title ?? String(t.contentId),
+      pageUrl: page?.url ?? '',
+      spaceKey: page?.spaceKey ?? '',
+      body: cleanTaskBody(t.body),
+      status: t.status,
+      createdDate: t.createDate,
+      dueDate: t.dueDate,
+      creator: t.creator ? usersMap.get(t.creator) : undefined,
+      assignee: t.assignee ? usersMap.get(t.assignee) : undefined,
+    };
+  });
 }
 
 export async function getPagesLinkedToIssue(issueKey: string): Promise<ConfluencePage[]> {

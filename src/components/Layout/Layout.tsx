@@ -11,7 +11,6 @@ import {
   Sparkles,
   Calendar,
   TrendingUp,
-  Grid2x2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { NetworkLogo } from './NetworkLogo';
@@ -21,12 +20,11 @@ const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/confluence', icon: FileText, label: 'Confluence' },
   { path: '/board', icon: Kanban, label: 'Jira Board' },
-  { path: '/todos', icon: CheckSquare, label: 'My Todos' },
+  { path: '/todos', icon: CheckSquare, label: 'Mine oppgaver' },
   { path: '/risk', icon: AlertTriangle, label: 'Risikopanel' },
   { path: '/digest', icon: Sparkles, label: 'Ukessammendrag' },
   { path: '/calendar', icon: Calendar, label: 'Team-kalender' },
   { path: '/my-metrics', icon: TrendingUp, label: 'Mine metrics' },
-  { path: '/microsoft', icon: Grid2x2, label: 'Microsoft 365' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
