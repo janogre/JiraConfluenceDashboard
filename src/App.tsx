@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from './components/Layout/Layout';
+import { LayoutV2 as Layout } from './components/Layout/LayoutV2';
 import { Dashboard } from './pages/Dashboard/Dashboard';
 import { Confluence } from './pages/Confluence/Confluence';
 import { Board } from './pages/Board/Board';
