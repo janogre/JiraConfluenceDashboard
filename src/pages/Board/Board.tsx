@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown, Search, CheckSquare, Check } from 'lucide-react';
+import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown, Search, CheckSquare, Check, AlertOctagon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
 import {
@@ -463,6 +463,25 @@ export function Board() {
               ))}
             </div>
           )}
+          {issue.links?.filter((l) => {
+            const t = l.type.name.toLowerCase();
+            return !!l.inwardIssue && (t.includes('block') || t.includes('blokkerer'));
+          }).map((l) => (
+            <div key={l.id} className={styles.cardBlockedBadge}>
+              <AlertOctagon size={11} />
+              Blokkert av{' '}
+              <a
+                href={`${jiraBaseUrl}/browse/${l.inwardIssue!.key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.cardBlockedLink}
+                onClick={(e) => e.stopPropagation()}
+                title={l.inwardIssue!.summary}
+              >
+                {l.inwardIssue!.key}
+              </a>
+            </div>
+          ))}
           {(() => {
             const derivedChildren = derivedChildrenMap.get(issue.key) ?? [];
             const hasChildren = (issue.subtasks?.length ?? 0) > 0 || derivedChildren.length > 0;

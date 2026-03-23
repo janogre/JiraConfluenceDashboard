@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, AlertOctagon } from 'lucide-react';
 import type { JiraIssue } from '../../types';
+import { TimelineReport } from './TimelineReport';
 import styles from './Timeline.module.css';
 
 interface TimelineProps {
@@ -42,6 +43,15 @@ function barColor(category: 'new' | 'indeterminate' | 'done'): string {
   }
 }
 
+function getBlockedBy(issue: JiraIssue): string[] {
+  return (issue.links ?? [])
+    .filter((l) => {
+      const t = l.type.name.toLowerCase();
+      return !!l.inwardIssue && (t.includes('block') || t.includes('blokkerer'));
+    })
+    .map((l) => l.inwardIssue!.key);
+}
+
 function statusBadgeClass(category: 'new' | 'indeterminate' | 'done'): string {
   switch (category) {
     case 'done': return styles.statusDone;
@@ -74,6 +84,7 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
 
   const [windowOffset, setWindowOffset] = useState(0);
   const [zoom, setZoom] = useState<ZoomLevel>('halfyear');
+  const [showReport, setShowReport] = useState(false);
 
   const zoomConfig = ZOOM_OPTIONS.find((z) => z.key === zoom)!;
   const windowStart = startOfMonth(addMonths(today, -zoomConfig.before + windowOffset));
@@ -138,9 +149,17 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
     }
   });
 
+  // Issues that are neither epics nor children of any epic
+  const assignedChildKeys = new Set(
+    [...childrenByEpic.values()].flat().map((i) => i.key)
+  );
+  const standaloneIssues = issues.filter(
+    (i) => !isEpicIssue(i) && !assignedChildKeys.has(i.key)
+  );
+
   const rows: Row[] = [];
   if (sectionExpanded) {
-    // Only epics at top level — expand to show children on click
+    // Epics at top level — expand to show children on click
     epics.forEach((epic) => {
       rows.push({ issue: epic, isEpic: true, isChild: false });
       if (expandedEpics.has(epic.key)) {
@@ -148,6 +167,10 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
           rows.push({ issue: child, isEpic: false, isChild: true });
         });
       }
+    });
+    // Standalone issues (not epic, not child of any epic) shown at top level
+    standaloneIssues.forEach((issue) => {
+      rows.push({ issue, isEpic: false, isChild: false });
     });
   }
 
@@ -187,6 +210,7 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
   const totalContentHeight = SECTION_ROW_HEIGHT + rows.length * ROW_HEIGHT;
 
   return (
+    <>
     <div className={styles.timelineWrapper}>
       {/* Navigation */}
       <div className={styles.navBar}>
@@ -195,6 +219,15 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
           {MONTH_NAMES[windowStart.getMonth()]} {windowStart.getFullYear()} – {MONTH_NAMES[windowEnd.getMonth()]} {windowEnd.getFullYear()}
         </span>
         <button className={styles.navButton} onClick={() => setWindowOffset((o) => o + 1)}>Neste &#8594;</button>
+        <button
+          className={styles.navButton}
+          style={{ marginLeft: 'auto', marginRight: 0 }}
+          onClick={() => setShowReport(true)}
+          disabled={issues.length === 0}
+          title={issues.length === 0 ? 'Ingen saker å rapportere' : 'Generer rapport for filtrerte saker'}
+        >
+          Generer rapport
+        </button>
         <div className={styles.zoomGroup}>
           {ZOOM_OPTIONS.map((z) => (
             <button
@@ -256,6 +289,17 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
               <span className={`${styles.statusBadge} ${statusBadgeClass(issue.status.category)}`}>
                 {issue.status.name}
               </span>
+              {(() => {
+                const blockedBy = getBlockedBy(issue);
+                return blockedBy.length > 0 ? (
+                  <span
+                    className={styles.blockedIcon}
+                    title={`Blokkert av: ${blockedBy.join(', ')}`}
+                  >
+                    <AlertOctagon size={13} />
+                  </span>
+                ) : null;
+              })()}
             </div>
           ))}
         </div>
@@ -312,6 +356,11 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
                         left: `${bar.left}%`,
                         width: `${bar.width}%`,
                         backgroundColor: barColor(issue.status.category),
+                        ...(getBlockedBy(issue).length > 0 ? {
+                          outline: '2px dashed #ef4444',
+                          outlineOffset: '1px',
+                          opacity: 0.85,
+                        } : {}),
                       }}
                     >
                       {!bar.isMilestone && <span className={styles.barLabel}>{issue.summary}</span>}
@@ -324,5 +373,10 @@ export function Timeline({ issues, jiraBaseUrl }: TimelineProps) {
         </div>
       </div>
     </div>
+
+    {showReport && (
+      <TimelineReport issues={issues} onClose={() => setShowReport(false)} />
+    )}
+    </>
   );
 }

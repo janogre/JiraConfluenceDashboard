@@ -110,7 +110,7 @@ export function Settings() {
             />
 
             <Input
-              label="Anthropic API Key (valgfri – brukes av Ukessammendrag)"
+              label="Anthropic API Key (valgfri – brukes av Ukessammendrag og Møtenotat-editor)"
               type="password"
               placeholder="sk-ant-..."
               value={config.anthropicApiKey ?? ''}

@@ -115,6 +115,23 @@
   white-space: nowrap;
 }
 
+.blockedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: default;
+}
+
 .assignee {
   display: flex;
   align-items: center;

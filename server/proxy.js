@@ -211,6 +211,128 @@ app.post('/api/ai/digest', express.json(), async (req, res) => {
   }
 });
 
+// AI timeline report endpoint
+app.post('/api/ai/timeline-report', express.json(), async (req, res) => {
+  const { apiKey, issues, reportDate } = req.body;
+  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
+  if (!issues || !issues.length) return res.status(400).json({ error: 'Missing issues' });
+
+  const issueList = issues.map((i) =>
+    `- ${i.key}: ${i.summary} | Type: ${i.issueType?.name ?? '–'} | Status: ${i.status?.name ?? '–'} | ` +
+    `Prioritet: ${i.priority?.name ?? '–'} | Ansvarlig: ${i.assignee?.displayName ?? 'Ikke tildelt'} | ` +
+    `Start: ${i.startDate ?? '–'} | Frist: ${i.dueDate ?? '–'}`
+  ).join('\n');
+
+  const systemPrompt = `Du er en profesjonell prosjektleder og teknisk rapportforfatter.
+Skriv alltid på formell norsk bokmål i saklig, profesjonell prosjektrapportstil.
+
+VIKTIG FORMATKRAV – følg disse strengt:
+- Skriv KUN i løpende prosa. Ingen punktlister, ingen bindestrek-lister.
+- Bruk IKKE markdown-formatering av noe slag: ikke **, ikke __, ikke #, ikke ##, ikke ~~, ikke \`kode\`.
+- Overskrifter for hvert avsnitt skrives som vanlig tekst på egen linje etterfulgt av kolon, f.eks.: "1. Overordnet formål og omfang:"
+- Etter overskriften følger en eller flere sammenhengende setninger som løpende prosa.
+- Ikke bruk tankestreker eller bindestreker som listemarkører.
+- Skriv som om dette er et formelt styredokument som leses på papir.`;
+
+  const userMessage = `Generer en profesjonell prosjektstatusrapport per ${reportDate} basert på følgende ${issues.length} Jira-saker fra tidslinjen.
+
+${issueList}
+
+Skriv en sammenhengende rapport med følgende avsnitt:
+1. Overordnet formål og omfang basert på sakene
+2. Fremdriftsstatus – hva er fullført, hva pågår, hva gjenstår
+3. Kritiske frister og milepæler
+4. Risikovurdering basert på uløste saker uten frist eller med høy prioritet
+5. Anbefaling for neste periode
+
+Rapporten skal egne seg som vedlegg til et styremøte eller prosjektstatusrapport.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1400,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// AI meeting note rewrite endpoint
+app.post('/api/ai/rewrite-meeting', express.json(), async (req, res) => {
+  const { notes, attendees, context, apiKey } = req.body;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'Missing Anthropic API key' });
+  }
+  if (!notes) {
+    return res.status(400).json({ error: 'Missing notes content' });
+  }
+
+  const systemPrompt = `Du er en profesjonell møtereferent. Renskriver uferdige møtenotater til velstrukturerte, profesjonelle referater på norsk.
+
+Struktur alltid svaret slik (bruk markdown):
+## Sammendrag
+En kort oppsummering (2-4 setninger).
+
+## Deltakere
+Liste over deltakere (hvis oppgitt).
+
+## Agendapunkter og diskusjon
+Strukturerte punkter fra møtet.
+
+## Beslutninger
+Klare beslutninger som ble tatt.
+
+## Aksjoner
+Liste over aksjoner med ansvarlig person (hvis nevnt) og eventuell frist.
+
+Regler:
+- Behold ALLE faktaopplysninger nøyaktig slik de er oppgitt
+- Bruk profesjonell norsk
+- Ikke legg til informasjon som ikke finnes i originalen
+- Sett "–" under seksjoner der det ikke er relevant innhold`;
+
+  const userMessage = [
+    attendees ? `Deltakere: ${attendees}` : null,
+    context ? `Kontekst/instruksjoner: ${context}` : null,
+    `Møtenotat:\n${notes}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================

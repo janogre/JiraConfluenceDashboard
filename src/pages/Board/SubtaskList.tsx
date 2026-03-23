@@ -55,7 +55,25 @@ export function SubtaskList({ parentKey, jiraBaseUrl, fallback, currentUserDispl
               {child.key}
             </a>
             <span className={styles.subtaskSummary}>{child.summary}</span>
-            {isMe && <span className={styles.subtaskMeBadge}>Meg</span>}
+            {child.assignee && (
+              isMe ? (
+                <span className={styles.subtaskMeBadge}>Meg</span>
+              ) : child.assignee.avatarUrl ? (
+                <img
+                  src={child.assignee.avatarUrl}
+                  alt={child.assignee.displayName}
+                  className={styles.subtaskAssigneeAvatar}
+                  title={child.assignee.displayName}
+                />
+              ) : (
+                <div
+                  className={styles.subtaskAssigneeInitial}
+                  title={child.assignee.displayName}
+                >
+                  {child.assignee.displayName.charAt(0)}
+                </div>
+              )
+            )}
           </li>
         );
       })}

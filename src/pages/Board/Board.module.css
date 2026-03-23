@@ -394,6 +394,31 @@
   white-space: nowrap;
 }
 
+/* Blocked badge on card */
+.cardBlockedBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 7px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.cardBlockedLink {
+  color: #b91c1c;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+.cardBlockedLink:hover {
+  color: #991b1b;
+}
+
 /* Subtasks */
 .subtasksSection {
   display: flex;
@@ -496,6 +521,29 @@
   border-radius: 999px;
   background: var(--color-primary);
   color: white;
+}
+
+.subtaskAssigneeAvatar,
+.subtaskAssigneeInitial {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.subtaskAssigneeAvatar {
+  object-fit: cover;
+}
+
+.subtaskAssigneeInitial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 600;
 }
 
 .subtaskDot {
