@@ -1,0 +1,362 @@
+/* ── Overlay & Shell ─────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 900px;
+  background: #f1f5f9;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #1e293b;
+  color: #f8fafc;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.toolbarTitle {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.toolbarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbarBtnPrimary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+}
+
+.toolbarBtnPrimary:hover:not(:disabled) {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+.toolbarBtnClose {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.toolbarBtnClose:hover {
+  background: #450a0a;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.7s linear infinite; }
+
+/* ── Scroll area ─────────────────────────────────────────────────────── */
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  background: #e2e8f0;
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── A4 page ─────────────────────────────────────────────────────────── */
+.pageWrapper {
+  width: 794px;           /* A4 at 96dpi */
+  min-height: 1123px;     /* A4 height at 96dpi */
+  background: #ffffff;
+  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.16);
+  padding: 48px 52px 40px;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  position: relative;
+}
+
+/* ── Document header ─────────────────────────────────────────────────── */
+.docHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.docBrand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.docMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.docMetaDivider {
+  color: #cbd5e1;
+}
+
+.docHeaderRight {
+  text-align: right;
+}
+
+.docConfidential {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.docHeaderRule {
+  height: 3px;
+  background: linear-gradient(90deg, #1d4ed8 0%, #0ea5e9 60%, #e2e8f0 100%);
+  margin-bottom: 24px;
+  border-radius: 2px;
+}
+
+/* ── KPI boxes ───────────────────────────────────────────────────────── */
+.kpiRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.kpiBox {
+  flex: 1;
+  min-width: 80px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.kpiValue {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.kpiLabel {
+  font-size: 0.68rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 28px;
+}
+
+.sectionTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid #1d4ed8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Narrative text ──────────────────────────────────────────────────── */
+.narrativeText {
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.generating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 0.82rem;
+  padding: 12px 0;
+}
+
+.errorText {
+  color: #dc2626;
+  font-size: 0.82rem;
+}
+
+.placeholderText {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+/* ── Issue table ─────────────────────────────────────────────────────── */
+.issueTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  table-layout: fixed;
+}
+
+.issueTable thead th {
+  padding: 7px 8px;
+  text-align: left;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: none;
+}
+
+.issueTable thead th:first-child { border-radius: 4px 0 0 0; }
+.issueTable thead th:last-child  { border-radius: 0 4px 0 0; }
+
+.issueTable tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.rowAlt td {
+  background: #f8fafc;
+}
+
+.keyCell {
+  font-weight: 700;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.summaryCell {
+  font-size: 0.73rem;
+  line-height: 1.35;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.typeCell {
+  font-size: 0.71rem;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusPill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.priorityCell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.71rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.priorityDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.assigneeCell {
+  font-size: 0.71rem;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dateCell {
+  font-size: 0.71rem;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.dateOverdue {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* ── Document footer ─────────────────────────────────────────────────── */
+.docFooter {
+  position: absolute;
+  bottom: 20px;
+  left: 52px;
+  right: 52px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}

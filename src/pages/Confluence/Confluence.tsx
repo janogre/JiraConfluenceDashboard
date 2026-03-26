@@ -31,6 +31,7 @@ import {
 } from '../../services/confluenceService';
 import { isConfigured } from '../../services/api';
 import type { ConfluencePage, ConfluenceSpace } from '../../types';
+import { MeetingNoteEditor } from './MeetingNoteEditor';
 import styles from './Confluence.module.css';
 
 interface CreateTodoFromTaskModalProps {
@@ -188,6 +189,105 @@ function PageTreeNode({ page }: { page: ConfluencePage }) {
   );
 }
 
+function MeetingFolderNode({ folder, formatDate }: { folder: ConfluencePage; formatDate: (d: string) => string }) {
+  const [expanded, setExpanded] = useState(false);
+  const configured = isConfigured();
+
+  const { data: children, isFetching } = useQuery({
+    queryKey: ['confluenceChildren', folder.id],
+    queryFn: () => getChildPages(folder.id),
+    enabled: configured && expanded,
+  });
+
+  const sortedChildren = useMemo(() => {
+    if (!children) return [];
+    const subFolders = children
+      .filter((p) => p.type === 'folder' || p.hasChildren)
+      .sort((a, b) => a.title.localeCompare(b.title, 'nb'));
+    const pages = children
+      .filter((p) => p.type !== 'folder' && !p.hasChildren)
+      .sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    return [...subFolders, ...pages];
+  }, [children]);
+
+  return (
+    <div className={styles.meetingFolder}>
+      <button
+        className={styles.meetingFolderRow}
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+      >
+        <span className={styles.meetingFolderToggle}>
+          {isFetching ? (
+            <Loader2 size={13} className={styles.treeSpinner} />
+          ) : expanded ? (
+            <ChevronDown size={14} />
+          ) : (
+            <ChevronRight size={14} />
+          )}
+        </span>
+        {expanded ? (
+          <FolderOpen size={15} className={styles.treeFolderIcon} />
+        ) : (
+          <Folder size={15} className={styles.treeFolderIcon} />
+        )}
+        <span className={styles.meetingFolderTitle}>{folder.title}</span>
+      </button>
+
+      {expanded && (
+        <div className={styles.meetingFolderChildren}>
+          {!isFetching && sortedChildren.length === 0 ? (
+            <div className={styles.meetingFolderEmpty}>Ingen sider</div>
+          ) : (
+            sortedChildren.map((child) =>
+              child.type === 'folder' || child.hasChildren ? (
+                <MeetingFolderNode key={child.id} folder={child} formatDate={formatDate} />
+              ) : (
+                <div key={child.id} className={styles.recentFeedItem}>
+                  <FileText size={15} className={styles.treePageIcon} />
+                  <div className={styles.recentItemContent}>
+                    <a
+                      href={child.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.recentItemTitle}
+                    >
+                      {child.title}
+                    </a>
+                    <div className={styles.recentItemMeta}>
+                      {child.lastModified && (
+                        <span>
+                          <Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                          {formatDate(child.lastModified)}
+                        </span>
+                      )}
+                      {child.lastModifiedBy && (
+                        <>
+                          <span>·</span>
+                          <span>{child.lastModifiedBy.displayName}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <a
+                    href={child.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.treePageLink}
+                    title="Åpne i Confluence"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              )
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STARRED_SPACES_KEY = 'confluence_starred_spaces';
 
 function loadStarred(): Set<string> {
@@ -211,7 +311,7 @@ export function Confluence() {
   const [starredKeys, setStarredKeys] = useState<Set<string>>(loadStarred);
   const [treeSearch, setTreeSearch] = useState('');
   const [debouncedTreeSearch, setDebouncedTreeSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'pages' | 'recent' | 'author' | 'meetings' | 'tasks'>('pages');
+  const [activeTab, setActiveTab] = useState<'pages' | 'recent' | 'author' | 'meetings' | 'tasks' | 'new-note'>('pages');
   const [taskStatus, setTaskStatus] = useState<'incomplete' | 'complete'>('incomplete');
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<string>('');
   const [taskDueDateFilter, setTaskDueDateFilter] = useState<'all' | 'overdue' | 'week' | 'no-due'>('all');
@@ -347,12 +447,16 @@ export function Confluence() {
     });
   }, [inlineTasks, taskAssigneeFilter, taskDueDateFilter]);
 
-  const sortedMeetingNotes = useMemo(() =>
-    [...(meetingNotes ?? [])].sort(
-      (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
-    ),
-    [meetingNotes]
-  );
+  const sortedMeetingNotes = useMemo(() => {
+    const notes = [...(meetingNotes ?? [])];
+    const folders = notes
+      .filter((p) => p.type === 'folder' || p.hasChildren)
+      .sort((a, b) => a.title.localeCompare(b.title, 'nb'));
+    const pages = notes
+      .filter((p) => p.type !== 'folder' && !p.hasChildren)
+      .sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    return { folders, pages, total: notes.length };
+  }, [meetingNotes]);
 
   const uniqueAuthors = useMemo(() => {
     if (!authorPoolPages) return [];
@@ -538,6 +642,14 @@ export function Confluence() {
                 onClick={() => setActiveTab('tasks')}
               >
                 Handlingselementer
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'new-note' ? styles.tabActive : ''} ${styles.tabNewNote}`}
+                onClick={() => setActiveTab('new-note')}
+                disabled={!selectedSpace}
+                title={!selectedSpace ? 'Velg et område for å skrive møtenotat' : undefined}
+              >
+                + Nytt notat
               </button>
             </div>
           )}
@@ -814,14 +926,17 @@ export function Confluence() {
                   <FileText size={48} />
                   <p>Fant ingen side kalt «Møtenotater» i dette området.</p>
                 </div>
-              ) : sortedMeetingNotes.length === 0 ? (
+              ) : sortedMeetingNotes.total === 0 ? (
                 <div className={styles.emptyState}>
                   <FileText size={48} />
                   <p>Ingen møtenotater funnet.</p>
                 </div>
               ) : (
                 <div className={styles.recentFeed}>
-                  {sortedMeetingNotes.map((page) => (
+                  {sortedMeetingNotes.folders.map((folder) => (
+                    <MeetingFolderNode key={folder.id} folder={folder} formatDate={formatDate} />
+                  ))}
+                  {sortedMeetingNotes.pages.map((page) => (
                     <div key={page.id} className={styles.recentFeedItem}>
                       <FileText size={15} className={styles.treePageIcon} />
                       <div className={styles.recentItemContent}>
@@ -863,6 +978,11 @@ export function Confluence() {
               )}
             </>
           )}
+          {/* Tab: Nytt notat */}
+          {!isSearching && activeTab === 'new-note' && selectedSpace && (
+            <MeetingNoteEditor space={selectedSpace} />
+          )}
+
           {/* Tab: Handlingselementer */}
           {!isSearching && activeTab === 'tasks' && (
             <>

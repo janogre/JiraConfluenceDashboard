@@ -1,5 +1,5 @@
-import { getApi, getConfluenceBaseUrl } from './api';
-import type { ConfluencePage, ConfluenceSpace, ConfluenceTask } from '../types';
+import { getApi, getConfluenceBaseUrl, getJiraBaseUrl } from './api';
+import type { ConfluencePage, ConfluenceSpace, ConfluenceTask, ConfluenceTemplate } from '../types';
 
 interface ConfluenceApiPage {
   id: string;
@@ -407,6 +407,112 @@ export async function getInlineTasks(
       assignee: t.assignee ? usersMap.get(t.assignee) : undefined,
     };
   });
+}
+
+export interface ConfluenceUserResult {
+  accountId: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+export async function searchUsers(query: string): Promise<ConfluenceUserResult[]> {
+  if (!query || query.length < 2) return [];
+  const api = getApi();
+
+  // 1) Prøv Jira user/search – mest pålitelig på Atlassian Cloud
+  try {
+    const jiraUrl = getJiraBaseUrl();
+    const r = await api.get<Array<{
+      accountId: string;
+      displayName: string;
+      avatarUrls?: { '48x48'?: string };
+    }>>(`${jiraUrl}/rest/api/3/user/search`, {
+      params: { query, maxResults: 10 },
+    });
+    if (r.data.length > 0) {
+      return r.data.map((u) => ({
+        accountId: u.accountId,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrls?.['48x48'],
+      }));
+    }
+  } catch { /* prøv neste */ }
+
+  // 2) Fallback: Confluence user/picker
+  try {
+    const baseUrl = getConfluenceBaseUrl();
+    const r = await api.get<{
+      users?: Array<{ user: { accountId: string; displayName: string; profilePicture?: { path: string } } }>;
+      results?: Array<{ accountId: string; displayName: string; profilePicture?: { path: string } }>;
+    }>(`${baseUrl}/wiki/rest/api/user/picker`, {
+      params: { query, limit: 10 },
+    });
+    const items = r.data.users
+      ? r.data.users.map((u) => u.user)
+      : (r.data.results ?? []);
+    return items.map((u) => ({
+      accountId: u.accountId,
+      displayName: u.displayName,
+      avatarUrl: u.profilePicture?.path
+        ? `${baseUrl}${u.profilePicture.path}`
+        : undefined,
+    }));
+  } catch { /* ingen treff */ }
+
+  return [];
+}
+
+export async function getPageTemplates(spaceKey: string): Promise<ConfluenceTemplate[]> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+  try {
+    const response = await api.get<{
+      results: Array<{ templateId: string; name: string; description?: string; body?: { storage?: { value: string } } }>;
+    }>(`${baseUrl}/wiki/rest/api/template/page`, {
+      params: { spaceKey, limit: 50, expand: 'body' },
+    });
+    return response.data.results.map((t) => ({
+      templateId: t.templateId,
+      name: t.name,
+      description: t.description,
+      body: t.body?.storage?.value,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function createPage(
+  spaceKey: string,
+  title: string,
+  body: string,
+  parentId?: string
+): Promise<ConfluencePage> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+
+  const payload: Record<string, unknown> = {
+    type: 'page',
+    title,
+    space: { key: spaceKey },
+    body: {
+      storage: {
+        value: body,
+        representation: 'storage',
+      },
+    },
+  };
+
+  if (parentId) {
+    payload.ancestors = [{ id: parentId }];
+  }
+
+  const response = await api.post<ConfluenceApiPage>(
+    `${baseUrl}/wiki/rest/api/content`,
+    payload,
+    { params: { expand: 'space,version' } }
+  );
+  return mapPage(response.data, baseUrl, spaceKey);
 }
 
 export async function getPagesLinkedToIssue(issueKey: string): Promise<ConfluencePage[]> {

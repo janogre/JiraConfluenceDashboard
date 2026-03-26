@@ -180,6 +180,13 @@ export interface ConfluenceTask {
   assignee?: { displayName: string; accountId?: string };
 }
 
+export interface ConfluenceTemplate {
+  templateId: string;
+  name: string;
+  description?: string;
+  body?: string; // storage-format HTML
+}
+
 // Private Todo Types
 export interface TodoSubtask {
   id: string;

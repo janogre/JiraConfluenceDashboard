@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, CheckSquare, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, CheckSquare, Check, AlertOctagon } from 'lucide-react';
 import { Badge, Modal } from '../../components/common';
 import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
@@ -229,6 +229,15 @@ export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps)
               </div>
               <div className={`${styles.colData} ${styles.colSummary}`}>
                 <span className={styles.summary}>{issue.summary}</span>
+                {issue.links?.filter((l) => {
+                  const t = l.type.name.toLowerCase();
+                  return !!l.inwardIssue && (t.includes('block') || t.includes('blokkerer'));
+                }).map((l) => (
+                  <span key={l.id} className={styles.blockedBadge} title={`Blokkert av ${l.inwardIssue!.key}: ${l.inwardIssue!.summary}`}>
+                    <AlertOctagon size={11} />
+                    Blokkert av {l.inwardIssue!.key}
+                  </span>
+                ))}
               </div>
               <div className={styles.colData}>
                 <Badge
