@@ -18,6 +18,7 @@ import {
   TrendingUp,
   PanelLeftOpen,
   PanelLeftClose,
+  Wand2,
 } from 'lucide-react';
 import { NetworkLogo } from './NetworkLogo';
 import styles from './LayoutV2.module.css';
@@ -26,8 +27,9 @@ const COLLAPSED = 64;
 const EXPANDED = 224;
 
 const navItems = [
-  { path: '/',           icon: LayoutDashboard, label: 'Dashboard'      },
-  { path: '/confluence', icon: FileText,         label: 'Confluence'     },
+  { path: '/',                icon: LayoutDashboard, label: 'Dashboard'       },
+  { path: '/project-wizard', icon: Wand2,           label: 'Prosjektwizard'  },
+  { path: '/confluence',     icon: FileText,         label: 'Confluence'      },
   { path: '/board',      icon: Kanban,           label: 'Jira Board'     },
   { path: '/todos',      icon: CheckSquare,      label: 'Mine oppgaver'  },
   { path: '/risk',       icon: AlertTriangle,    label: 'Risikopanel'    },

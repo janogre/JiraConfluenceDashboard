@@ -10,6 +10,7 @@ import { Risk } from './pages/Risk/Risk';
 import { Digest } from './pages/Digest/Digest';
 import { TeamCalendar } from './pages/Calendar/Calendar';
 import { MyMetrics } from './pages/MyMetrics/MyMetrics';
+import { ProjectWizard } from './pages/ProjectWizard/ProjectWizard';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -36,6 +37,7 @@ function App() {
             <Route path="digest" element={<Digest />} />
             <Route path="calendar" element={<TeamCalendar />} />
             <Route path="my-metrics" element={<MyMetrics />} />
+            <Route path="project-wizard" element={<ProjectWizard />} />
           </Route>
         </Routes>
       </BrowserRouter>

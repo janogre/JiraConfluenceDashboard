@@ -333,6 +333,95 @@ Regler:
   }
 });
 
+// AI project documents endpoint
+app.post('/api/ai/project-documents', express.json(), async (req, res) => {
+  const { apiKey, documents, projectInfo, additionalInfo } = req.body;
+  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
+  if (!documents || !documents.length) return res.status(400).json({ error: 'Missing documents list' });
+
+  const docNames = {
+    mandate:      'Prosjektmandat',
+    needs:        'Behovsanalyse',
+    decision:     'Beslutningsgrunnlag',
+    risk:         'Risikoanalyse',
+    stakeholders: 'Interessentanalyse',
+    status:       'Statusrapport-mal',
+  };
+
+  const systemPrompt = `Du er en erfaren prosjektleder og dokumentasjonsspesialist.
+Skriv alltid på formell norsk bokmål.
+Du skal returnere et JSON-array (og INGENTING annet – ingen forklaring, ingen markdown-blokk rundt JSON).
+
+Hvert element i arrayet har følgende struktur:
+{ "type": "<dokumentnøkkel>", "title": "<tittel inkl. prosjektnavn>", "markdown": "<innhold i markdown>" }
+
+Regler for innholdet:
+- Bruk markdown-overskrifter (##, ###) og punktlister der det passer.
+- Bruk profesjonell, saklig norsk prosjektspråk.
+- Innholdet skal være gjennomarbeidet og klart til publisering.
+- For statusrapport-mal: lag en tom mal med plassholdere markert med [].`;
+
+  const docList = documents.map((key) => docNames[key] || key).join(', ');
+  const userMessage = `Generer følgende prosjektdokumenter: ${docList}.
+
+Prosjektinformasjon:
+- Navn: ${projectInfo.name}
+- Ansvarlig: ${projectInfo.owner || '(ikke oppgitt)'}
+- Beskrivelse: ${projectInfo.description || '(ikke oppgitt)'}
+
+Tilleggsinformasjon:
+- Formål / problem: ${additionalInfo.purpose || '(ikke oppgitt)'}
+- Ønsket resultat / mål: ${additionalInfo.goals || '(ikke oppgitt)'}
+- Frist: ${additionalInfo.deadline || '(ikke oppgitt)'}
+- Varighet: ${additionalInfo.duration || '(ikke oppgitt)'}
+- Budsjett: ${additionalInfo.budget || '(ikke oppgitt)'}
+- Interessenter: ${additionalInfo.stakeholders || '(ikke oppgitt)'}
+- Kjente risikoer: ${additionalInfo.risks || '(ikke oppgitt)'}
+
+Dokumentnøkler som skal genereres: ${documents.join(', ')}
+
+Returner KUN et gyldig JSON-array uten annen tekst.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
+    }
+
+    const text = data.content?.[0]?.text ?? '';
+
+    // Strip potential markdown code fences
+    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    let results;
+    try {
+      results = JSON.parse(cleaned);
+    } catch {
+      return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) });
+    }
+
+    res.json({ results });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================
@@ -342,7 +431,8 @@ app.listen(PORT, () => {
   Endpoints:
   - GET  /health               Health check
   - GET  /api/test-connection  Test Atlassian connection
-  - ALL  /api/atlassian/proxy  Proxy requests
+  - ALL  /api/atlassian/proxy         Proxy requests
+  - POST /api/ai/project-documents   AI document generation
 ========================================
   `);
 });
