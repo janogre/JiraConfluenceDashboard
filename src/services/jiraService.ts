@@ -666,6 +666,62 @@ export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
   return response.data.issues.map(mapIssue);
 }
 
+export async function createIssue(
+  projectKey: string,
+  summary: string,
+  issueTypeName: string,
+  options?: {
+    description?: string;
+    dueDate?: string;
+    parentKey?: string;
+  }
+): Promise<{ id: string; key: string; url: string }> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+
+  const fields: Record<string, unknown> = {
+    project: { key: projectKey },
+    summary,
+    issuetype: { name: issueTypeName },
+  };
+
+  if (options?.description) {
+    fields.description = {
+      version: 1,
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: options.description }] }],
+    };
+  }
+
+  if (options?.dueDate) {
+    fields.duedate = options.dueDate;
+  }
+
+  if (options?.parentKey) {
+    fields.parent = { key: options.parentKey };
+  }
+
+  const response = await api.post<{ id: string; key: string }>(
+    `${baseUrl}/rest/api/3/issue`,
+    { fields }
+  );
+
+  const { id, key } = response.data;
+  return { id, key, url: `${baseUrl}/browse/${key}` };
+}
+
+export async function createRemoteLink(
+  issueKey: string,
+  url: string,
+  title: string
+): Promise<void> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  await api.post(`${baseUrl}/rest/api/3/issue/${issueKey}/remotelink`, {
+    object: { url, title },
+  });
+}
+
 // Run a filter by ID
 export async function runFilter(filterId: string): Promise<JiraIssue[]> {
   const api = getApi();

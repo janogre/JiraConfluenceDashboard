@@ -422,6 +422,66 @@ Returner KUN et gyldig JSON-array uten annen tekst.`;
   }
 });
 
+// AI suggest subtasks endpoint
+app.post('/api/ai/suggest-subtasks', express.json(), async (req, res) => {
+  const { apiKey, projectType, projectInfo, additionalInfo } = req.body;
+  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
+
+  const isType2 = projectType === 'type2';
+  const taskType = isType2 ? 'Oppgave-titler (tasks under en Oppgavesamling)' : 'Underoppgave-titler';
+
+  const systemPrompt = `Du er en erfaren prosjektleder.
+Returner KUN et gyldig JSON-objekt på formen: { "subtasks": [{ "title": "..." }, ...] }
+Foreslå 3–7 elementer. Skriv på norsk bokmål. Ingen annen tekst – kun JSON.`;
+
+  const context = isType2
+    ? [
+        `Prosjektnavn: ${projectInfo?.name || '(ikke oppgitt)'}`,
+        `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`,
+        `Formål: ${additionalInfo?.purpose || '(ikke oppgitt)'}`,
+        `Mål: ${additionalInfo?.goals || '(ikke oppgitt)'}`,
+        `Interessenter: ${additionalInfo?.stakeholders || '(ikke oppgitt)'}`,
+      ].join('\n')
+    : [
+        `Oppgavenavn: ${projectInfo?.name || '(ikke oppgitt)'}`,
+        `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`,
+      ].join('\n');
+
+  const userMessage = `Foreslå ${taskType} for følgende ${isType2 ? 'prosjekt' : 'oppgave'}:\n\n${context}\n\nReturner KUN JSON.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
+    }
+    const text = data.content?.[0]?.text ?? '';
+    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    let result;
+    try {
+      result = JSON.parse(cleaned);
+    } catch {
+      return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) });
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================

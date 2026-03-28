@@ -475,3 +475,115 @@
   color: var(--color-text-secondary, #6b7280);
   margin-top: 0.5rem;
 }
+
+/* ── Type selection cards ── */
+.typeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.typeCard {
+  border: 2px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 1.5rem 1.25rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: var(--color-bg, #f9fafb);
+  user-select: none;
+}
+
+.typeCard:hover {
+  border-color: var(--color-primary-light, #95c672);
+  background: #f0faf4;
+}
+
+.typeCardSelected {
+  border-color: var(--color-primary, #1e7a4a);
+  background: #edf7f2;
+}
+
+.typeCardIcon {
+  color: var(--color-primary, #1e7a4a);
+  opacity: 0.8;
+}
+
+.typeCardSelected .typeCardIcon {
+  opacity: 1;
+}
+
+.typeCardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text, #111827);
+  margin: 0 0 0.3rem 0;
+}
+
+.typeCardDesc {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Subtask / task editor ── */
+.subtaskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.subtaskRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.subtaskRow .input {
+  flex: 1;
+}
+
+.subtaskDeleteBtn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
+  transition: background 0.12s, color 0.12s;
+}
+
+.subtaskDeleteBtn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.addSubtaskBtn {
+  background: none;
+  border: 1px dashed var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary, #6b7280);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.addSubtaskBtn:hover {
+  border-color: var(--color-primary, #1e7a4a);
+  color: var(--color-primary, #1e7a4a);
+}
