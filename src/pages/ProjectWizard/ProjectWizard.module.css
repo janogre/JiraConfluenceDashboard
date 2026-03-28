@@ -587,3 +587,84 @@
   border-color: var(--color-primary, #1e7a4a);
   color: var(--color-primary, #1e7a4a);
 }
+
+/* ── Jira user picker ── */
+.userPickerWrap {
+  position: relative;
+}
+
+.userPickerDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 50;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.userPickerItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 0.875rem;
+}
+
+.userPickerItem:hover {
+  background: #f0faf4;
+}
+
+.userPickerItemText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userPickerItemName {
+  font-weight: 500;
+  color: var(--color-text, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userPickerItemEmail {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.userPickerChip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-primary, #1e7a4a);
+  border-radius: 8px;
+  background: #edf7f2;
+  min-height: 38px;
+}
+
+.userPickerChipName {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-primary, #1e7a4a);
+}

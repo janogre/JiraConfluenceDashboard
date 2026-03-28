@@ -666,6 +666,29 @@ export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
   return response.data.issues.map(mapIssue);
 }
 
+export async function searchJiraUsers(query: string): Promise<JiraUser[]> {
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<Array<{
+    accountId: string;
+    displayName: string;
+    emailAddress?: string;
+    avatarUrls?: { '48x48'?: string };
+    active: boolean;
+  }>>(`${baseUrl}/rest/api/3/user/search`, {
+    params: { query, maxResults: 10 },
+  });
+  return response.data
+    .filter((u) => u.active)
+    .map((u) => ({
+      accountId: u.accountId,
+      displayName: u.displayName,
+      emailAddress: u.emailAddress,
+      avatarUrl: u.avatarUrls?.['48x48'],
+      active: u.active,
+    }));
+}
+
 export async function createIssue(
   projectKey: string,
   summary: string,
@@ -674,6 +697,7 @@ export async function createIssue(
     description?: string;
     dueDate?: string;
     parentKey?: string;
+    assigneeAccountId?: string;
   }
 ): Promise<{ id: string; key: string; url: string }> {
   const api = getApi();
@@ -699,6 +723,10 @@ export async function createIssue(
 
   if (options?.parentKey) {
     fields.parent = { key: options.parentKey };
+  }
+
+  if (options?.assigneeAccountId) {
+    fields.assignee = { accountId: options.assigneeAccountId };
   }
 
   const response = await api.post<{ id: string; key: string }>(

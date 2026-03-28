@@ -4,7 +4,8 @@ import { CheckCircle, ChevronDown, ChevronRight, Briefcase, Layers } from 'lucid
 import { getSpaces, getSpaceHomePage, getChildPages, createPage } from '../../services/confluenceService';
 import type { ConfluencePage } from '../../types';
 import { getAnthropicKey } from '../../services/api';
-import { getProjects, createIssue, createRemoteLink } from '../../services/jiraService';
+import { getProjects, createIssue, createRemoteLink, searchJiraUsers } from '../../services/jiraService';
+import type { JiraUser } from '../../types';
 import { Button } from '../../components/common/Button';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import styles from './ProjectWizard.module.css';
@@ -66,7 +67,8 @@ type WizardType = '' | 'type1' | 'type2';
 
 interface TaskInfo {
   name: string;
-  owner: string;
+  ownerAccountId: string;
+  ownerName: string;
   description: string;
   jiraProjectKey: string;
   dueDate: string;
@@ -270,6 +272,81 @@ function PageTreePicker({ spaceKey, selectedId, selectedTitle, onSelect, onClear
   );
 }
 
+// ── Jira user picker ───────────────────────────────────────────────────────
+
+function JiraUserPicker({ value, valueLabel, onSelect, onClear }: {
+  value: string;
+  valueLabel: string;
+  onSelect: (user: JiraUser) => void;
+  onClear: () => void;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(inputValue), 300);
+    return () => clearTimeout(t);
+  }, [inputValue]);
+
+  const { data: results = [], isFetching } = useQuery({
+    queryKey: ['jiraUserSearch', debouncedQuery],
+    queryFn: () => searchJiraUsers(debouncedQuery),
+    enabled: debouncedQuery.length >= 2,
+  });
+
+  if (value) {
+    return (
+      <div className={styles.userPickerChip}>
+        <span className={styles.userPickerChipName}>{valueLabel}</span>
+        <button className={styles.treePickerClear} onClick={onClear} title="Fjern valg">✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.userPickerWrap}>
+      <input
+        className={styles.input}
+        value={inputValue}
+        onChange={(e) => { setInputValue(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Søk navn eller e-post…"
+        autoComplete="off"
+      />
+      {open && debouncedQuery.length >= 2 && (
+        <div className={styles.userPickerDropdown}>
+          {isFetching && <div className={styles.userPickerItem}>Søker…</div>}
+          {!isFetching && results.length === 0 && (
+            <div className={styles.userPickerItem} style={{ color: 'var(--color-text-secondary)' }}>
+              Ingen treff
+            </div>
+          )}
+          {results.map((u) => (
+            <div
+              key={u.accountId}
+              className={styles.userPickerItem}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onSelect(u); setInputValue(''); setOpen(false); }}
+            >
+              {u.avatarUrl && (
+                <img src={u.avatarUrl} alt="" className={styles.userAvatar} />
+              )}
+              <div className={styles.userPickerItemText}>
+                <span className={styles.userPickerItemName}>{u.displayName}</span>
+                {u.emailAddress && (
+                  <span className={styles.userPickerItemEmail}>{u.emailAddress}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function ProjectWizard() {
@@ -278,7 +355,7 @@ export function ProjectWizard() {
 
   // ── Type 1 state ──
   const [taskInfo, setTaskInfo] = useState<TaskInfo>({
-    name: '', owner: '', description: '', jiraProjectKey: '', dueDate: '',
+    name: '', ownerAccountId: '', ownerName: '', description: '', jiraProjectKey: '', dueDate: '',
   });
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>([]);
   const [suggestingSubtasks, setSuggestingSubtasks] = useState(false);
@@ -451,6 +528,7 @@ export function ProjectWizard() {
         {
           description: taskInfo.description || undefined,
           dueDate: taskInfo.dueDate || undefined,
+          assigneeAccountId: taskInfo.ownerAccountId || undefined,
         }
       );
       results.push({ title: `${mainIssue.key} – ${taskInfo.name}`, url: mainIssue.url });
@@ -652,11 +730,11 @@ export function ProjectWizard() {
 
         <div className={styles.field}>
           <label className={styles.label}>Ansvarlig</label>
-          <input
-            className={styles.input}
-            value={taskInfo.owner}
-            onChange={(e) => updateTaskInfo('owner', e.target.value)}
-            placeholder="f.eks. Ola Nordmann"
+          <JiraUserPicker
+            value={taskInfo.ownerAccountId}
+            valueLabel={taskInfo.ownerName}
+            onSelect={(u) => setTaskInfo((prev) => ({ ...prev, ownerAccountId: u.accountId, ownerName: u.displayName }))}
+            onClear={() => setTaskInfo((prev) => ({ ...prev, ownerAccountId: '', ownerName: '' }))}
           />
         </div>
 
