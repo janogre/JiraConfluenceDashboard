@@ -1,203 +1,199 @@
 # Jira & Confluence Dashboard
 
-A user-friendly project management tool that integrates with Jira and Confluence APIs. Features include project overview, task management, Confluence pages, a personal Kanban board, and a private todo list.
+Et React-basert prosjektstyringsverktøy som integrerer Jira og Confluence i ett grensesnitt. Bygget for intern bruk med NEAS Energi Telekom-profil.
 
-## Features
+---
 
-### Project Overview (Dashboard)
-- View statistics for projects, issues, pages, and todos
-- See recent Jira issues updated in the last 7 days
-- Browse recent Confluence pages
-- Quick access to active todos
+## Funksjoner
 
-### Jira Integration
-- Browse all Jira projects
-- View and search issues within projects
-- See issue details: status, priority, assignee, reporter, labels
-- **My Issues** - View issues assigned to you
-- **Watched Issues** - View issues you're watching
-- **Favorite Filters** - Run your saved Jira filters
-- **Comments** - View comments on issues
-- **Time Tracking** - View logged time on issues
-- Direct links to open issues in Jira
+### Dashboard
+Samlet oversikt over prosjekter, nylige Jira-saker, aktivitetsgraf og teamarbeidsbelastning.
 
-### Confluence Integration
-- Browse Confluence spaces
-- Search pages across spaces
-- View page excerpts and metadata
-- Direct links to open pages in Confluence
+### Prosjekter & Tavle (Board)
+- Bla gjennom alle Jira-prosjekter og -saker
+- Filtrering, sortering og detaljvisning
+- Sprint-visning
+- Tidslinje med blokkerings-visualisering mellom avhengige saker
+- AI-generert tidslinjerapport (Claude Sonnet 4.6)
 
-### Kanban Board
-- Personal Kanban board with drag-and-drop cards
-- Customizable columns (default: Backlog, To Do, In Progress, Review, Done)
-- Link cards to Jira issues
-- Add due dates and labels to cards
-- Optional mapping to Jira statuses
+### Confluence
+- Bla gjennom spaces og sider
+- Søk med CQL på tvers av spaces
+- Møtenotat-editor med AI-omskriving til strukturert referat
 
-### Private Todo List
-- Create personal todos with priorities (Low, Medium, High)
-- Set due dates for todos
-- Link todos to Kanban cards
-- Link todos to Jira issues
-- Track completion status
+### Mine oppgaver (Todos)
+- Privat gjøremålsliste lagret lokalt
+- Kobling mot Jira-saker og Kanban-kort
+- Prioritet og frist per oppgave
 
-## Getting Started
+### Risikoanalyse
+Visuell risikoregister koblet mot Jira-saker.
 
-### Prerequisites
+### Digest
+AI-generert daglig oppsummering av Jira-aktivitet.
+
+### Teamkalender
+Oversikt over frister, sprinter og milepæler på tvers av prosjekter.
+
+### Mine målinger (My Metrics)
+Personlig statistikk for løste saker, arbeidsbelastning og produktivitet.
+
+### Prosjektwizard
+Veiledet oppretting av oppgave eller prosjekt i to varianter:
+
+**Enkel oppgave (Type 1) — 4 steg**
+1. Velg type
+2. Fyll inn oppgavenavn, ansvarlig, Jira-prosjekt og frist
+3. AI foreslår underoppgaver (redigerbar liste)
+4. Oppretter Oppgave + Underoppgaver direkte i Jira — klikkbare lenker i suksess-boks
+
+**Større prosjekt (Type 2) — 6 steg**
+1. Velg type
+2. Fyll inn prosjektinfo med Jira-prosjekt og Confluence-space
+3. Velg dokumenttyper (Prosjektmandat, Behovsanalyse, Risikoanalyse m.fl.)
+4. Tilleggsinformasjon til AI (formål, mål, interessenter, budsjett)
+5. AI foreslår Jira-oppgaver under Oppgavesamlingen (redigerbar liste)
+6. Publiserer alt med ett klikk:
+   - Confluence-prosjektmappe med alle dokumenter
+   - Jira Oppgavesamling med tilhørende Oppgaver
+   - Remote link fra Jira-saken til Confluence-mappen
+
+### Innstillinger
+Konfigurasjon av Jira-URL, Confluence-URL, API-token og Anthropic API-nøkkel.
+
+---
+
+## Teknisk stack
+
+| Teknologi | Bruk |
+|-----------|------|
+| React 19 + TypeScript | Frontend |
+| Vite | Bundler / dev-server (port 5173) |
+| react-router-dom | Routing |
+| TanStack Query | Server-state (Jira/Confluence API) |
+| Zustand | Lokal state (Kanban, Todos) med localStorage-persistering |
+| @hello-pangea/dnd | Drag-and-drop (Kanban) |
+| Axios | HTTP-klient mot proxy |
+| CSS Modules | Styling |
+| Express (proxy) | CORS-omgåelse mot Atlassian API (port 3001) |
+| Claude Sonnet 4.6 | AI-funksjoner (dokumentgenerering, møtereferat, forslag) |
+
+---
+
+## Kom i gang
+
+### Krav
 - Node.js 18+
-- npm or yarn
-- Jira/Confluence Cloud account with API access
+- Jira Cloud- og/eller Confluence Cloud-konto med API-token
+- Anthropic API-nøkkel (for AI-funksjoner)
 
-### Installation
+### Installasjon
 
 ```bash
-# Install dependencies
 npm install
-
-# Start both proxy server and frontend (recommended)
-npm start
 ```
 
-**Important**: The app requires a local proxy server to communicate with Atlassian APIs due to CORS restrictions. Use `npm start` to run both the proxy and frontend together.
+### Utvikling
 
-### Configuration
+```bash
+# Start både proxy-server (port 3001) og Vite dev-server (port 5173)
+npm start
 
-1. Start the application and navigate to **Settings**
-2. Enter your Jira/Confluence credentials:
-   - **Jira Base URL**: `https://your-domain.atlassian.net`
-   - **Confluence Base URL**: Same as Jira URL for Atlassian Cloud (optional)
-   - **Email**: Your Atlassian account email
-   - **API Token**: Generated from [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+# Kun Vite dev-server
+npm run dev
 
-### Getting an API Token
+# Kun proxy-server
+npm run proxy
+```
 
-1. Go to [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. Click "Create API token"
-3. Give it a name (e.g., "Dashboard App")
-4. Copy the token and paste it in the Settings page
+### Produksjonsbygg
 
-## Architecture
+```bash
+npm run build
+npm run preview
+```
 
-The app uses a local proxy server to bypass CORS restrictions when communicating with Atlassian APIs:
+### Lint
+
+```bash
+npm run lint
+```
+
+---
+
+## Konfigurasjon
+
+Åpne appen og gå til **Innstillinger**. Fyll inn:
+
+| Felt | Eksempel |
+|------|---------|
+| Jira base URL | `https://dinorg.atlassian.net` |
+| Confluence base URL | `https://dinorg.atlassian.net` |
+| Brukernavn | din Atlassian e-postadresse |
+| API-token | fra [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens) |
+| Anthropic API-nøkkel | fra [console.anthropic.com](https://console.anthropic.com) |
+
+Innstillingene lagres kun i nettleserens localStorage.
+
+---
+
+## Arkitektur
 
 ```
 Browser (localhost:5173)
-    ↓
+    ↓ Axios + X-Target-URL-header
 Proxy Server (localhost:3001)
     ↓
-Atlassian Cloud APIs
+Atlassian Cloud APIs  /  Anthropic API
 ```
 
-The proxy server:
-- Runs on port 3001
-- Forwards requests to Atlassian with proper authentication
-- Adds CORS headers to allow browser requests
-
-## Project Structure
-
 ```
-├── server/
-│   └── proxy.js         # Express proxy server for Atlassian API
-├── src/
-│   ├── components/
-│   │   ├── Layout/      # Main layout with sidebar navigation
-│   │   └── common/      # Reusable UI components (Button, Card, Input, etc.)
-│   ├── pages/
-│   │   ├── Dashboard/   # Main dashboard with overview stats
-│   │   ├── Projects/    # Jira projects and issues view
-│   │   ├── Confluence/  # Confluence spaces and pages view
-│   │   ├── Kanban/      # Personal Kanban board
-│   │   ├── Todos/       # Private todo list
-│   │   └── Settings/    # API configuration
-│   ├── services/
-│   │   ├── api.ts       # API configuration and axios setup
-│   │   ├── jiraService.ts   # Jira API integration
-│   │   └── confluenceService.ts # Confluence API integration
-│   ├── store/
-│   │   ├── kanbanStore.ts   # Kanban board state (Zustand)
-│   │   └── todoStore.ts     # Todo list state (Zustand)
-│   ├── types/
-│   │   └── index.ts     # TypeScript type definitions
-│   └── App.tsx          # Main app with routing
+src/
+├── components/       # Delte UI-komponenter (Layout, Button, LoadingSpinner m.fl.)
+├── pages/            # En mappe per side/modul
+│   ├── Dashboard/
+│   ├── Board/        # Tavle, Sprint, Tidslinje, TimelineReport
+│   ├── Confluence/   # Sidevisning, MeetingNoteEditor
+│   ├── Todos/
+│   ├── Risk/
+│   ├── Digest/
+│   ├── Calendar/
+│   ├── MyMetrics/
+│   ├── ProjectWizard/
+│   └── Settings/
+├── services/         # API-lag: jiraService.ts, confluenceService.ts, api.ts
+├── store/            # Zustand-stores: kanbanStore.ts, todoStore.ts
+├── types/            # Delte TypeScript-typer (index.ts)
+└── index.css         # Globale CSS-variabler (NEAS-tema)
+
+server/
+└── proxy.js          # Express-proxy mot Atlassian + AI-endepunkter
 ```
 
-## Technology Stack
+Alle Atlassian API-kall rutes gjennom proxy-serveren via `X-Target-URL`-header for å unngå CORS-problemer.
 
-- **React 19** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
-- **React Router** - Client-side routing
-- **TanStack Query** - Data fetching and caching
-- **Zustand** - State management
-- **@hello-pangea/dnd** - Drag and drop for Kanban
-- **Axios** - HTTP client
-- **Lucide React** - Icons
+### AI-endepunkter i proxy
 
-## Available Scripts
+| Endepunkt | Beskrivelse |
+|-----------|-------------|
+| `POST /api/ai/digest` | Daglig oppsummering av Jira-aktivitet |
+| `POST /api/ai/timeline-report` | Prosjektstatusrapport fra tidslinje |
+| `POST /api/ai/rewrite-meeting` | Omskriving av møtenotater |
+| `POST /api/ai/project-documents` | Generering av prosjektdokumenter |
+| `POST /api/ai/suggest-subtasks` | Forslag til underoppgaver / Jira-oppgaver |
 
-```bash
-# Development (recommended - runs both proxy and frontend)
-npm start          # Start proxy server + dev server
+---
 
-# Individual servers
-npm run dev        # Start frontend dev server only
-npm run proxy      # Start proxy server only
+## Datalagring
 
-# Building
-npm run build      # Build for production
+| Data | Lagringssted |
+|------|-------------|
+| API-konfigurasjon | localStorage (`jira-confluence-config`) |
+| Kanban-tavle | localStorage (`kanban-storage`) |
+| Privat todo-liste | localStorage (`todo-storage`) |
 
-# Linting
-npm run lint       # Run ESLint
+---
 
-# Preview
-npm run preview    # Preview production build
-```
+## Lisens
 
-## Data Storage
-
-- **API Configuration**: Stored in localStorage (`jira-confluence-config`)
-- **Kanban Board**: Stored in localStorage (`kanban-storage`)
-- **Todo List**: Stored in localStorage (`todo-storage`)
-
-All local data persists between sessions.
-
-## API Endpoints Used
-
-### Jira REST API v3
-- `GET /rest/api/3/project` - List projects
-- `GET /rest/api/3/project/{key}` - Get project details
-- `POST /rest/api/3/search/jql` - Search issues (JQL) - *New endpoint, replaces deprecated `/rest/api/3/search`*
-- `GET /rest/api/3/issue/{key}` - Get issue details
-- `GET /rest/api/3/myself` - Get current user
-- `GET /rest/api/3/filter/favourite` - Get favorite filters
-- `GET /rest/api/3/filter/{id}` - Get filter details
-- `GET /rest/api/3/issue/{key}/comment` - Get issue comments
-- `GET /rest/api/3/issue/{key}/worklog` - Get issue worklog
-- `POST /rest/api/3/issue/{key}/worklog` - Add worklog entry
-- `GET /rest/api/3/project/{key}/statuses` - Get project statuses
-- `GET /rest/api/3/issue/{key}/transitions` - Get available transitions
-- `POST /rest/api/3/issue/{key}/transitions` - Transition issue
-
-### Confluence REST API
-- `GET /wiki/rest/api/space` - List spaces
-- `GET /wiki/rest/api/space/{key}` - Get space details
-- `GET /wiki/rest/api/content` - List pages
-- `GET /wiki/rest/api/content/{id}` - Get page details
-- `GET /wiki/rest/api/content/search` - Search pages (CQL)
-
-## JQL Queries Used
-
-The app uses the following JQL queries to fetch issues:
-
-| Query | Description |
-|-------|-------------|
-| `assignee = currentUser() AND resolution = EMPTY` | My open issues |
-| `watcher = currentUser()` | Issues I'm watching |
-| `updated >= -7d` | Recently updated issues |
-| `project = "KEY"` | Issues in a specific project |
-
-You can also use your own saved filters from Jira, which are displayed in the Dashboard under "Favorite Filters".
-
-## License
-
-Private project - All rights reserved
+Privat prosjekt – alle rettigheter forbeholdt.
