@@ -110,6 +110,19 @@ interface SubtaskItem {
   title: string;
 }
 
+// ── Starred projects (shared with Board) ──────────────────────────────────
+
+const STARRED_PROJECTS_KEY = 'board_starred_projects';
+
+function loadStarredProjects(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STARRED_PROJECTS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 // ── Step label sets ────────────────────────────────────────────────────────
 
 const STEP_LABELS_TYPE1 = ['Velg type', 'Oppgaveinfo', 'Underoppgaver', 'Opprett i Jira'];
@@ -396,6 +409,8 @@ export function ProjectWizard() {
     queryFn: getProjects,
   });
 
+  const [starredProjects] = useState<Set<string>>(loadStarredProjects);
+
   useEffect(() => {
     setProjectInfo((prev) => ({ ...prev, parentId: '', parentTitle: '' }));
   }, [projectInfo.spaceKey]);
@@ -676,6 +691,29 @@ export function ProjectWizard() {
 
   // ── Step renderers ──
 
+  function renderJiraProjectSelect(value: string, onChange: (key: string) => void) {
+    if (projectsLoading) return <p className={styles.statusMsg}>Laster prosjekter…</p>;
+    const starred = jiraProjects.filter((p) => starredProjects.has(p.key));
+    const rest = jiraProjects.filter((p) => !starredProjects.has(p.key));
+    return (
+      <select className={styles.select} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— Velg Jira-prosjekt —</option>
+        {starred.length > 0 && (
+          <optgroup label="⭐ Favoritter">
+            {starred.map((p) => (
+              <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label={starred.length > 0 ? 'Alle prosjekter' : ''}>
+          {rest.map((p) => (
+            <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
+          ))}
+        </optgroup>
+      </select>
+    );
+  }
+
   function renderStep0() {
     return (
       <div className={styles.card}>
@@ -752,22 +790,7 @@ export function ProjectWizard() {
         <div className={styles.fieldRow}>
           <div className={styles.field}>
             <label className={styles.label}>Jira-prosjekt *</label>
-            {projectsLoading ? (
-              <p className={styles.statusMsg}>Laster prosjekter…</p>
-            ) : (
-              <select
-                className={styles.select}
-                value={taskInfo.jiraProjectKey}
-                onChange={(e) => updateTaskInfo('jiraProjectKey', e.target.value)}
-              >
-                <option value="">— Velg prosjekt —</option>
-                {jiraProjects.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.name} ({p.key})
-                  </option>
-                ))}
-              </select>
-            )}
+            {renderJiraProjectSelect(taskInfo.jiraProjectKey, (key) => updateTaskInfo('jiraProjectKey', key))}
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Frist</label>
@@ -914,22 +937,7 @@ export function ProjectWizard() {
         <div className={styles.fieldRow}>
           <div className={styles.field}>
             <label className={styles.label}>Jira-prosjekt *</label>
-            {projectsLoading ? (
-              <p className={styles.statusMsg}>Laster prosjekter…</p>
-            ) : (
-              <select
-                className={styles.select}
-                value={projectInfo.jiraProjectKey}
-                onChange={(e) => updateProjectInfo('jiraProjectKey', e.target.value)}
-              >
-                <option value="">— Velg Jira-prosjekt —</option>
-                {jiraProjects.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.name} ({p.key})
-                  </option>
-                ))}
-              </select>
-            )}
+            {renderJiraProjectSelect(projectInfo.jiraProjectKey, (key) => updateProjectInfo('jiraProjectKey', key))}
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Confluence-space *</label>
