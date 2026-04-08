@@ -41,6 +41,7 @@ interface ConfluenceApiPage {
 }
 
 interface ConfluenceApiSpace {
+  id: number;
   key: string;
   name: string;
   description?: {
@@ -83,6 +84,7 @@ function mapPage(apiPage: ConfluenceApiPage, baseUrl: string, fallbackSpaceKey?:
 function mapSpace(apiSpace: ConfluenceApiSpace, baseUrl: string): ConfluenceSpace {
   const linkedBase = apiSpace._links.base || baseUrl;
   return {
+    id: String(apiSpace.id),
     key: apiSpace.key,
     name: apiSpace.name,
     description: apiSpace.description?.plain?.value,
@@ -261,12 +263,13 @@ export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
 
-  // Primær: bruk dedikert child-pages-endepunkt (unngår CQL-søk)
+  // Primær: CQL parent= henter alle barnetyper (sider, mapper, blogposts)
   try {
     const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
-      `${baseUrl}/wiki/rest/api/content/${pageId}/child/page`,
+      `${baseUrl}/wiki/rest/api/content/search`,
       {
         params: {
+          cql: `parent=${pageId}`,
           limit: 100,
           expand: 'version,space,childTypes.page',
         },
@@ -275,12 +278,11 @@ export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
     const linkedBase = response.data._links?.base || baseUrl;
     return response.data.results.map((page) => mapPage(page, linkedBase));
   } catch {
-    // Fallback: CQL parent= for å også fange opp folders/blogposts
+    // Fallback: dedikert endepunkt (kun sider, ikke mapper)
     const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
-      `${baseUrl}/wiki/rest/api/content/search`,
+      `${baseUrl}/wiki/rest/api/content/${pageId}/child/page`,
       {
         params: {
-          cql: `parent=${pageId}`,
           limit: 100,
           expand: 'version,space,childTypes.page',
         },
@@ -552,4 +554,56 @@ export async function getPagesLinkedToIssue(issueKey: string): Promise<Confluenc
     ...mapPage(page, baseUrl),
     linkedIssues: [issueKey],
   }));
+}
+
+export async function createWhiteboard(spaceId: string, title: string, parentId?: string): Promise<string> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+  const payload: Record<string, unknown> = { spaceId, title };
+  if (parentId) payload.parentId = parentId;
+  const response = await api.post<{ _links: { base?: string; webui: string } }>(
+    `${baseUrl}/wiki/api/v2/whiteboards`,
+    payload
+  );
+  const base = response.data._links.base || `${baseUrl}/wiki`;
+  return `${base}${response.data._links.webui}`;
+}
+
+export async function createDatabase(spaceId: string, title: string, parentId?: string): Promise<string> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+  const payload: Record<string, unknown> = { spaceId, title };
+  if (parentId) payload.parentId = parentId;
+  const response = await api.post<{ _links: { base?: string; webui: string } }>(
+    `${baseUrl}/wiki/api/v2/databases`,
+    payload
+  );
+  const base = response.data._links.base || `${baseUrl}/wiki`;
+  return `${base}${response.data._links.webui}`;
+}
+
+export async function createFolder(
+  spaceKey: string,
+  title: string,
+  parentId?: string
+): Promise<ConfluencePage> {
+  const api = getApi();
+  const baseUrl = getConfluenceBaseUrl();
+
+  const payload: Record<string, unknown> = {
+    type: 'folder',
+    title,
+    space: { key: spaceKey },
+  };
+
+  if (parentId) {
+    payload.ancestors = [{ id: parentId }];
+  }
+
+  const response = await api.post<ConfluenceApiPage>(
+    `${baseUrl}/wiki/rest/api/content`,
+    payload,
+    { params: { expand: 'space,version' } }
+  );
+  return mapPage(response.data, baseUrl, spaceKey);
 }

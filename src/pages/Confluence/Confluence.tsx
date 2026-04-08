@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
   ExternalLink,
@@ -15,6 +15,8 @@ import {
   CheckSquare,
   Check,
   Plus,
+  LayoutGrid,
+  Table2,
 } from 'lucide-react';
 import { Card, CardContent, Input, LoadingOverlay, Modal } from '../../components/common';
 import { useTodoStore } from '../../store/todoStore';
@@ -28,6 +30,10 @@ import {
   getPagesByAuthor,
   findPageByTitle,
   getInlineTasks,
+  createPage,
+  createWhiteboard,
+  createDatabase,
+  createFolder,
 } from '../../services/confluenceService';
 import { isConfigured } from '../../services/api';
 import type { ConfluencePage, ConfluenceSpace } from '../../types';
@@ -123,8 +129,104 @@ function CreateTodoFromTaskModal({ task, onClose }: CreateTodoFromTaskModalProps
   );
 }
 
-function PageTreeNode({ page }: { page: ConfluencePage }) {
+type CreateContentType = 'page' | 'whiteboard' | 'database' | 'folder';
+
+const CREATE_TYPE_LABELS: Record<CreateContentType, string> = {
+  page: 'Side',
+  whiteboard: 'Tavle',
+  database: 'Database',
+  folder: 'Mappe',
+};
+
+function CreateContentModal({
+  space,
+  contentType,
+  parentId,
+  onClose,
+}: {
+  space: ConfluenceSpace;
+  contentType: CreateContentType;
+  parentId?: string;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      switch (contentType) {
+        case 'page': {
+          const page = await createPage(space.key, title, '', parentId);
+          return page.url;
+        }
+        case 'whiteboard':
+          return createWhiteboard(space.id, title, parentId);
+        case 'database':
+          return createDatabase(space.id, title, parentId);
+        case 'folder': {
+          const folder = await createFolder(space.key, title, parentId);
+          return folder.url;
+        }
+      }
+    },
+    onSuccess: (url) => {
+      queryClient.invalidateQueries({ queryKey: ['confluenceHomePage', space.key] });
+      if (parentId) {
+        queryClient.invalidateQueries({ queryKey: ['confluenceChildren', parentId] });
+      }
+      window.open(url, '_blank');
+      onClose();
+    },
+  });
+
+  const label = CREATE_TYPE_LABELS[contentType];
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Opprett ${label.toLowerCase()}`} size="sm">
+      <div className={styles.createForm}>
+        <div className={styles.formField}>
+          <label className={styles.formLabel}>Tittel</label>
+          <input
+            className={styles.formInput}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={`Ny ${label.toLowerCase()}…`}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && title.trim()) mutation.mutate();
+            }}
+          />
+        </div>
+        {mutation.isError && (
+          <div className={styles.createContentError}>
+            {(mutation.error as Error)?.message || 'Kunne ikke opprette innhold'}
+          </div>
+        )}
+        <div className={styles.formActions}>
+          <button
+            className={styles.createBtn}
+            onClick={() => mutation.mutate()}
+            disabled={!title.trim() || mutation.isPending}
+          >
+            {mutation.isPending ? 'Oppretter…' : `Opprett og åpne`}
+          </button>
+          <button className={styles.cancelBtn} onClick={onClose}>
+            Avbryt
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PageTreeNode({ page, space, onCreateUnder }: {
+  page: ConfluencePage;
+  space: ConfluenceSpace;
+  onCreateUnder: (parentId: string, type: CreateContentType) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const configured = isConfigured();
 
   const { data: children, isFetching } = useQuery({
@@ -132,6 +234,17 @@ function PageTreeNode({ page }: { page: ConfluencePage }) {
     queryFn: () => getChildPages(page.id),
     enabled: configured && expanded,
   });
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMenu]);
 
   const canExpand = page.hasChildren !== false;
 
@@ -166,22 +279,61 @@ function PageTreeNode({ page }: { page: ConfluencePage }) {
         >
           {page.title}
         </a>
-        <a
-          href={page.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={styles.treePageLink}
-          title="Åpne i Confluence"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink size={12} />
-        </a>
+        <div className={styles.treeNodeActions}>
+          <div className={styles.treeAddWrapper} ref={menuRef}>
+            <button
+              className={styles.treeAddBtn}
+              onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
+              title="Opprett innhold under denne"
+            >
+              <Plus size={13} />
+            </button>
+            {showMenu && (
+              <div className={styles.treeAddDropdown}>
+                <button
+                  className={styles.createDropdownItem}
+                  onClick={() => { onCreateUnder(page.id, 'page'); setShowMenu(false); }}
+                >
+                  <FileText size={14} /> Side
+                </button>
+                <button
+                  className={styles.createDropdownItem}
+                  onClick={() => { onCreateUnder(page.id, 'whiteboard'); setShowMenu(false); }}
+                >
+                  <LayoutGrid size={14} /> Tavle
+                </button>
+                <button
+                  className={styles.createDropdownItem}
+                  onClick={() => { onCreateUnder(page.id, 'database'); setShowMenu(false); }}
+                >
+                  <Table2 size={14} /> Database
+                </button>
+                <button
+                  className={styles.createDropdownItem}
+                  onClick={() => { onCreateUnder(page.id, 'folder'); setShowMenu(false); }}
+                >
+                  <Folder size={14} /> Mappe
+                </button>
+              </div>
+            )}
+          </div>
+          <a
+            href={page.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.treePageLink}
+            title="Åpne i Confluence"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={12} />
+          </a>
+        </div>
       </div>
 
       {expanded && children && children.length > 0 && (
         <div className={styles.treeChildren}>
           {children.map((child) => (
-            <PageTreeNode key={child.id} page={child} />
+            <PageTreeNode key={child.id} page={child} space={space} onCreateUnder={onCreateUnder} />
           ))}
         </div>
       )}
@@ -319,7 +471,14 @@ export function Confluence() {
   const { getTodosByConfluenceTask } = useTodoStore();
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [authorSearch, setAuthorSearch] = useState('');
+  const [createType, setCreateType] = useState<CreateContentType | null>(null);
+  const [createParentId, setCreateParentId] = useState<string | undefined>();
   const configured = isConfigured();
+
+  const handleCreateUnder = (parentId: string, type: CreateContentType) => {
+    setCreateParentId(parentId);
+    setCreateType(type);
+  };
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -759,7 +918,7 @@ export function Confluence() {
                 )
               ) : (
                 <div className={styles.treeView}>
-                  {homePage && <PageTreeNode page={homePage} />}
+                  {homePage && selectedSpace && <PageTreeNode page={homePage} space={selectedSpace} onCreateUnder={handleCreateUnder} />}
                 </div>
               )}
             </>
@@ -1067,6 +1226,15 @@ export function Confluence() {
         <CreateTodoFromTaskModal
           task={createTodoFromTask}
           onClose={() => setCreateTodoFromTask(null)}
+        />
+      )}
+
+      {createType && selectedSpace && (
+        <CreateContentModal
+          space={selectedSpace}
+          contentType={createType}
+          parentId={createParentId}
+          onClose={() => { setCreateType(null); setCreateParentId(undefined); }}
         />
       )}
     </div>

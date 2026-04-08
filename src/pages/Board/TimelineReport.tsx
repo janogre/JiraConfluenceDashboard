@@ -116,7 +116,7 @@ export function TimelineReport({ issues, onClose }: TimelineReportProps) {
           html2canvas: { scale: 2, useCORS: true, logging: false },
           jsPDF:      { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak:  { mode: ['avoid-all', 'css'], before: '.pdf-page-break' },
-        })
+        } as Record<string, unknown>)
         .from(printRef.current)
         .save();
     } finally {

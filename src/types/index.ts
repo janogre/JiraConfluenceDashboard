@@ -159,6 +159,7 @@ export interface ConfluencePage {
 }
 
 export interface ConfluenceSpace {
+  id: string;
   key: string;
   name: string;
   description?: string;

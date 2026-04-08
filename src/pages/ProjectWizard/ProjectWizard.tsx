@@ -40,7 +40,7 @@ function markdownToStorageFormat(markdown: string): string {
       const rows = bodyRows.trim().split('\n').filter(Boolean).map(parseRow);
       const thCells = headers.map((h) => `<th><p><strong>${h}</strong></p></th>`).join('');
       const trRows = rows
-        .map((cells) => `<tr>${cells.map((c) => `<td><p>${c}</p></td>`).join('')}</tr>`)
+        .map((cells: string[]) => `<tr>${cells.map((c: string) => `<td><p>${c}</p></td>`).join('')}</tr>`)
         .join('');
       return `<table><tbody><tr>${thCells}</tr>${trRows}</tbody></table>\n`;
     }
@@ -822,7 +822,7 @@ export function ProjectWizard() {
             onClick={() => handleSuggestSubtasks('type1')}
             disabled={suggestingSubtasks}
           >
-            {suggestingSubtasks ? <><LoadingSpinner size="small" /> Foreslår…</> : '✨ AI-forslag'}
+            {suggestingSubtasks ? <><LoadingSpinner size="sm" /> Foreslår…</> : '✨ AI-forslag'}
           </Button>
         </div>
 
@@ -875,7 +875,7 @@ export function ProjectWizard() {
 
         {creatingJira && (
           <div className={styles.statusMsg}>
-            <LoadingSpinner size="small" />
+            <LoadingSpinner size="sm" />
             <p>{operationStatus}</p>
           </div>
         )}
@@ -1112,7 +1112,7 @@ export function ProjectWizard() {
             onClick={() => handleSuggestSubtasks('type2')}
             disabled={suggestingTasks}
           >
-            {suggestingTasks ? <><LoadingSpinner size="small" /> Foreslår…</> : '✨ AI-forslag'}
+            {suggestingTasks ? <><LoadingSpinner size="sm" /> Foreslår…</> : '✨ AI-forslag'}
           </Button>
         </div>
 
@@ -1166,7 +1166,7 @@ export function ProjectWizard() {
 
         {generating && (
           <div className={styles.statusMsg}>
-            <LoadingSpinner size="small" />
+            <LoadingSpinner size="sm" />
             <p>Genererer innhold…</p>
           </div>
         )}
