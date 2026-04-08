@@ -260,20 +260,35 @@ export async function getSpaceHomePage(spaceKey: string): Promise<ConfluencePage
 export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
-  // Use CQL parent= to get ALL child types (pages, folders, blogposts)
-  const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
-    `${baseUrl}/wiki/rest/api/content/search`,
-    {
-      params: {
-        cql: `parent=${pageId}`,
-        limit: 100,
-        expand: 'version,space,childTypes.page',
-      },
-    }
-  );
-  // Use _links.base from the response (includes /wiki), falling back to baseUrl
-  const linkedBase = response.data._links?.base || baseUrl;
-  return response.data.results.map((page) => mapPage(page, linkedBase));
+
+  // Primær: bruk dedikert child-pages-endepunkt (unngår CQL-søk)
+  try {
+    const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+      `${baseUrl}/wiki/rest/api/content/${pageId}/child/page`,
+      {
+        params: {
+          limit: 100,
+          expand: 'version,space,childTypes.page',
+        },
+      }
+    );
+    const linkedBase = response.data._links?.base || baseUrl;
+    return response.data.results.map((page) => mapPage(page, linkedBase));
+  } catch {
+    // Fallback: CQL parent= for å også fange opp folders/blogposts
+    const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+      `${baseUrl}/wiki/rest/api/content/search`,
+      {
+        params: {
+          cql: `parent=${pageId}`,
+          limit: 100,
+          expand: 'version,space,childTypes.page',
+        },
+      }
+    );
+    const linkedBase = response.data._links?.base || baseUrl;
+    return response.data.results.map((page) => mapPage(page, linkedBase));
+  }
 }
 
 export async function findPageByTitle(
