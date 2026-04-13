@@ -9,7 +9,7 @@
 
 Legger til et nytt menyvalg «Team» i applikasjonen. Formålet er å gi teamkoordinatorer en dedikert oversikt over oppgaver knyttet til sitt team, samt et verktøy for å tildele ansvarlig på oppgaver som ennå mangler dette. Hvert team identifiseres ved at visse Jira-komponenter knyttes til det.
 
-De fire teamene er faste: **Administrasjon**, **System**, **Nettverk**, **NOC**.
+De fire teamene er faste: **Administrasjon**, **System**, **Nettverk**, **NOC**. Alle team jobber på tvers av alle Jira-prosjekter.
 
 ---
 
@@ -53,8 +53,8 @@ Under fanene vises to underfaner for valgt team:
 - Legende under
 
 **Saksliste:**
-- Viser alle saker tilhørende teamets komponenter
-- Kolonner: nøkkel, tittel, komponent, prioritet, status, ansvarlig, forfallsdato
+- Viser alle saker tilhørende teamets komponenter (åpne og lukkede)
+- Kolonner: nøkkel, tittel, prosjekt, komponent, prioritet, status, ansvarlig, forfallsdato
 - Filtrering på: prioritet, status, komponent
 - Klikk på sak åpner eksisterende saksmodal (gjenbruk fra `Board.tsx`)
 
@@ -84,24 +84,20 @@ Viser kun saker tilhørende teamets komponenter der `assignee` er `null`.
 
 Ny seksjon i `Settings.tsx` under eksisterende API-konfig, med tittel **«Team-oppsett»**.
 
-**Team-prosjekt:**
-- Et tekstfelt for Jira-prosjektnøkkel (f.eks. `DRIFT`) som Team-siden bruker som datakilde
-- Lagres som del av `team-component-config` i localStorage
-- Komponentlisten i oppsett-boksen hentes fra dette prosjektet
-- Vises øverst i seksjonen, over team-boksene
-
 - Fire bokser, én per team, i et 2×2 grid
 - Hver boks viser:
   - Teamnavn
   - Eksisterende komponenter som fargede chips med ×-knapp for fjerning
-  - Søkbart input: viser dropdown med Jira-komponenter (hentet fra valgt prosjekt) som ikke allerede er tildelt dette teamet
+  - Søkbart input: viser dropdown med Jira-komponenter (hentet fra alle tilgjengelige prosjekter) som ikke allerede er tildelt noe team
 - En komponent kan kun tilhøre **ett** team
 - «Lagre oppsett»-knapp lagrer til `localStorage` med nøkkel `team-component-config`
+
+**Komponent-autocomplete:**
+Komponenter hentes fra alle tilgjengelige Jira-prosjekter via `getProjects()` (allerede i cachen) etterfulgt av `GET /rest/api/3/project/{projectKey}/components` for hvert prosjekt. Resultatet caches i TanStack Query med lang staleTime (30 min) siden komponentlister endres sjelden.
 
 **Datastruktur i localStorage:**
 ```json
 {
-  "projectKey": "DRIFT",
   "Administrasjon": ["HR-system", "Økonomi"],
   "System": ["Netadmin", "Power BI"],
   "Nettverk": ["Fiber"],
@@ -116,12 +112,12 @@ Ny seksjon i `Settings.tsx` under eksisterende API-konfig, med tittel **«Team-o
 | Data | Kilde | Metode |
 |------|-------|--------|
 | Team-komponent-konfig | localStorage | Leses ved oppstart av Team-siden |
-| Jira-saker | Jira API via proxy | Eksisterende `getIssues()`, filtreres på klientsiden |
+| Jira-saker for team | Jira API via proxy | Ny `getIssuesByComponents(componentNames[])` med JQL: `component in ("X","Y") ORDER BY updated DESC` |
 | Brukerliste for tildeling | Jira API | Ny `searchUsers(query)` i `jiraService.ts` |
 | Tildeling | Jira API | Ny `assignIssue(issueKey, accountId)` i `jiraService.ts` |
-| Komponentliste (for oppsett) | Jira API | Ny `getProjectComponents(projectKey)` i `jiraService.ts` |
+| Komponentliste (for oppsett) | Jira API | Ny `getAllProjectComponents()` i `jiraService.ts` — henter fra alle prosjekter og deduplicerer |
 
-**Caching:** Saker hentes med TanStack Query (eksisterende mønster, 5 min staleTime). Etter tildeling oppdateres cache direkte med `queryClient.setQueryData` — ingen full re-fetch nødvendig.
+**Caching:** Saker hentes med TanStack Query (5 min staleTime). Komponentliste caches med 30 min staleTime. Etter tildeling oppdateres cache direkte med `queryClient.setQueryData` — ingen full re-fetch nødvendig.
 
 ---
 
@@ -139,7 +135,7 @@ src/pages/Team/
 - `src/App.tsx` — ny rute `/team`
 - `src/components/Layout/LayoutV2.tsx` — nytt menyvalg
 - `src/pages/Settings/Settings.tsx` — ny seksjon for team-oppsett
-- `src/services/jiraService.ts` — tre nye funksjoner: `searchUsers`, `assignIssue`, `getProjectComponents`
+- `src/services/jiraService.ts` — fire nye funksjoner: `getIssuesByComponents`, `searchUsers`, `assignIssue`, `getAllProjectComponents`
 
 ---
 
@@ -148,4 +144,4 @@ src/pages/Team/
 - Teams er hardkodet (Administrasjon, System, Nettverk, NOC) — ingen CRUD for team i denne omgang
 - Koordinator-visningen inkluderer ikke sprint-informasjon
 - Sakslisten i koordinator-visningen gjenbruker eksisterende saksmodal fra Board
-- Komponent-oppsett krever at Jira-prosjektnøkkel er konfigurert i Innstillinger
+- Saker uten komponent-tilknytning vises ikke i noen teamvisning
