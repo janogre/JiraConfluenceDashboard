@@ -669,6 +669,7 @@ export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
 }
 
 export async function searchJiraUsers(query: string): Promise<JiraUser[]> {
+  if (!query.trim()) return [];
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
   const response = await api.get<Array<{
@@ -771,50 +772,25 @@ export async function getIssuesByComponents(componentNames: string[]): Promise<J
   return getIssues(undefined, jql, true);
 }
 
-export async function searchUsers(query: string): Promise<JiraUser[]> {
-  if (!query.trim()) return [];
-  const api = getApi();
-  const baseUrl = getJiraBaseUrl();
-  const response = await api.get<Array<{
-    accountId: string;
-    displayName: string;
-    emailAddress?: string;
-    avatarUrls?: { '48x48'?: string };
-    active: boolean;
-  }>>(`${baseUrl}/rest/api/3/user/search`, {
-    params: { query, maxResults: 10 },
-  });
-  return response.data
-    .filter((u) => u.active)
-    .map((u) => ({
-      accountId: u.accountId,
-      displayName: u.displayName,
-      emailAddress: u.emailAddress,
-      avatarUrl: u.avatarUrls?.['48x48'],
-      active: u.active,
-    }));
-}
-
 export async function getAllProjectComponents(): Promise<{ id: string; name: string }[]> {
   const projects = await getProjects();
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
 
-  const results = await Promise.all(
-    projects.map(async (project) => {
-      try {
-        const response = await api.get<Array<{ id: string; name: string }>>(
-          `${baseUrl}/rest/api/3/project/${project.key}/components`
-        );
-        return response.data.map((c) => ({ id: c.id, name: c.name }));
-      } catch {
-        return [];
-      }
-    })
-  );
+  const allComponents: { id: string; name: string }[] = [];
+  for (const project of projects) {
+    try {
+      const response = await api.get<Array<{ id: string; name: string }>>(
+        `${baseUrl}/rest/api/3/project/${project.key}/components`
+      );
+      allComponents.push(...response.data.map((c) => ({ id: c.id, name: c.name })));
+    } catch {
+      // Prosjekt mangler komponenter eller gir feil — fortsett
+    }
+  }
 
   const seen = new Set<string>();
-  return results.flat().filter((c) => {
+  return allComponents.filter((c) => {
     if (seen.has(c.name)) return false;
     seen.add(c.name);
     return true;
