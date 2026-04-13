@@ -23,6 +23,11 @@ function isOverdue(dateStr: string): boolean {
   return new Date(dateStr) < new Date(new Date().toDateString());
 }
 
+function toStatusCategory(key: string): 'new' | 'indeterminate' | 'done' {
+  if (key === 'new' || key === 'done') return key;
+  return 'indeterminate';
+}
+
 interface IssueModalProps {
   issue: JiraIssue;
   jiraBaseUrl: string;
@@ -37,6 +42,7 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
   const [todoPriority, setTodoPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [todoDueDate, setTodoDueDate] = useState('');
   const { addTodo, getTodosByJiraIssue } = useTodoStore();
+  const hasActiveTodo = getTodosByJiraIssue(issue.key).some((t) => !t.completed);
 
   const { data: transitions } = useQuery({
     queryKey: ['transitions', issue.key],
@@ -47,8 +53,11 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
     mutationFn: (vars: { transitionId: string; toStatusId: string; toStatusName: string; toCategoryKey: string }) =>
       transitionIssue(issue.key, vars.transitionId),
     onSuccess: (_, vars) => {
-      const category = vars.toCategoryKey as 'new' | 'indeterminate' | 'done';
-      onTransitioned?.(issue.key, { id: vars.toStatusId, name: vars.toStatusName, category });
+      onTransitioned?.(issue.key, {
+        id: vars.toStatusId,
+        name: vars.toStatusName,
+        category: toStatusCategory(vars.toCategoryKey),
+      });
     },
   });
 
@@ -259,8 +268,8 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
                 setTodoDueDate(issue.dueDate?.split('T')[0] ?? '');
                 setShowTodoForm(true);
               }}
-              disabled={getTodosByJiraIssue(issue.key).some((t) => !t.completed)}
-              title={getTodosByJiraIssue(issue.key).some((t) => !t.completed) ? 'Aktiv todo finnes allerede' : 'Opprett todo'}
+              disabled={hasActiveTodo}
+              title={hasActiveTodo ? 'Aktiv todo finnes allerede' : 'Opprett todo'}
             >
               <CheckSquare size={14} />
               Opprett todo
