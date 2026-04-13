@@ -57,3 +57,103 @@
 .help li {
   margin-bottom: var(--spacing-xs);
 }
+
+/* Team-oppsett */
+.teamGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.teamBox {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.teamBoxTitle {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-primary);
+}
+
+.teamChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--spacing-sm);
+  min-height: 28px;
+}
+
+.teamChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.teamChipRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.teamChipRemove:hover {
+  opacity: 1;
+}
+
+.teamCompSearch {
+  position: relative;
+}
+
+.teamCompInput {
+  width: 100%;
+  padding: 5px var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.teamCompInput:focus {
+  border-color: var(--color-primary);
+}
+
+.teamCompDropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.teamCompOption {
+  padding: 6px var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  color: var(--color-text-primary);
+}
+
+.teamCompOption:hover {
+  background: var(--color-bg-hover);
+}

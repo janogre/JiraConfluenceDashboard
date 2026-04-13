@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Save, Check, AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardContent, Button, Input } from '../../components/common';
 import { getApiConfig, saveApiConfig, isConfigured } from '../../services/api';
+import { getAllProjectComponents } from '../../services/jiraService';
+import { loadTeamConfig, saveTeamConfig, TEAM_NAMES } from '../../store/teamStore';
+import type { TeamConfig, TeamName } from '../../store/teamStore';
 import type { ApiConfig } from '../../types';
 import styles from './Settings.module.css';
 
@@ -49,6 +53,43 @@ export function Settings() {
   };
 
   const configured = isConfigured();
+
+  const [teamConfig, setTeamConfig] = useState<TeamConfig>(loadTeamConfig);
+  const [teamSaved, setTeamSaved] = useState(false);
+  const [componentSearch, setComponentSearch] = useState<Partial<Record<TeamName, string>>>({});
+  const [openDropdown, setOpenDropdown] = useState<TeamName | null>(null);
+
+  const { data: allComponents = [] } = useQuery({
+    queryKey: ['allProjectComponents'],
+    queryFn: getAllProjectComponents,
+    enabled: configured,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const assignedComponents = new Set(TEAM_NAMES.flatMap((t) => teamConfig[t]));
+
+  const handleAddComponent = (team: TeamName, compName: string) => {
+    setTeamConfig((prev) => ({
+      ...prev,
+      [team]: [...prev[team], compName],
+    }));
+    setComponentSearch((prev) => ({ ...prev, [team]: '' }));
+    setOpenDropdown(null);
+    setTeamSaved(false);
+  };
+
+  const handleRemoveComponent = (team: TeamName, compName: string) => {
+    setTeamConfig((prev) => ({
+      ...prev,
+      [team]: prev[team].filter((c) => c !== compName),
+    }));
+    setTeamSaved(false);
+  };
+
+  const handleSaveTeamConfig = () => {
+    saveTeamConfig(teamConfig);
+    setTeamSaved(true);
+  };
 
   return (
     <div className={styles.container}>
@@ -131,6 +172,90 @@ export function Settings() {
               <li>Paste the token above</li>
             </ol>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2>Team-oppsett</h2>
+        </CardHeader>
+        <CardContent>
+          {teamSaved && (
+            <div className={styles.statusSaved}>
+              <Check size={16} />
+              <span>Team-oppsett lagret!</span>
+            </div>
+          )}
+          {!configured && (
+            <div className={styles.statusError}>
+              <AlertCircle size={16} />
+              <span>Konfigurer API-tilgang først for å hente komponenter.</span>
+            </div>
+          )}
+
+          <div className={styles.teamGrid}>
+            {TEAM_NAMES.map((team) => {
+              const search = componentSearch[team] ?? '';
+              const suggestions = allComponents
+                .filter(
+                  (c) =>
+                    !assignedComponents.has(c.name) &&
+                    c.name.toLowerCase().includes(search.toLowerCase())
+                )
+                .slice(0, 8);
+
+              return (
+                <div key={team} className={styles.teamBox}>
+                  <div className={styles.teamBoxTitle}>{team}</div>
+                  <div className={styles.teamChips}>
+                    {teamConfig[team].map((comp) => (
+                      <span key={comp} className={styles.teamChip}>
+                        {comp}
+                        <button
+                          className={styles.teamChipRemove}
+                          onClick={() => handleRemoveComponent(team, comp)}
+                          title={`Fjern ${comp}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className={styles.teamCompSearch}>
+                    <input
+                      className={styles.teamCompInput}
+                      placeholder="+ Legg til komponent…"
+                      value={search}
+                      onChange={(e) => {
+                        setComponentSearch((prev) => ({ ...prev, [team]: e.target.value }));
+                        setOpenDropdown(team);
+                        setTeamSaved(false);
+                      }}
+                      onFocus={() => setOpenDropdown(team)}
+                      onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
+                    />
+                    {openDropdown === team && suggestions.length > 0 && (
+                      <div className={styles.teamCompDropdown}>
+                        {suggestions.map((c) => (
+                          <div
+                            key={c.name}
+                            className={styles.teamCompOption}
+                            onMouseDown={() => handleAddComponent(team, c.name)}
+                          >
+                            {c.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <Button onClick={handleSaveTeamConfig} icon={<Save size={16} />}>
+            Lagre team-oppsett
+          </Button>
         </CardContent>
       </Card>
     </div>
