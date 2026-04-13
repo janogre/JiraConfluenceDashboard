@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, ChevronDown, Search, CheckSquare, Check, AlertOctagon } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, Calendar, AlertCircle, Eye, EyeOff, Star, ArrowUpDown, X, Tag, Layers, ChevronDown, Search, AlertOctagon } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Badge, Modal, Button, LoadingOverlay } from '../../components/common';
+import { Badge, LoadingOverlay } from '../../components/common';
 import {
   getProjects,
   getMyIssues,
@@ -14,13 +14,13 @@ import {
   searchIssuesInProjects,
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
-import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
 import { Timeline } from './Timeline';
 import { ProjectPulse } from './ProjectPulse';
 import { IssueList } from './IssueList';
 import { SprintView } from './SprintView';
 import { SubtaskList } from './SubtaskList';
+import { IssueModal } from './IssueModal';
 import styles from './Board.module.css';
 
 const STARRED_PROJECTS_KEY = 'board_starred_projects';
@@ -52,11 +52,6 @@ export function Board() {
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
-  const [todoCreated, setTodoCreated] = useState(false);
-  const [showTodoForm, setShowTodoForm] = useState(false);
-  const [todoPriority, setTodoPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [todoDueDate, setTodoDueDate] = useState('');
-  const { addTodo, getTodosByJiraIssue } = useTodoStore();
   const [showAllDone, setShowAllDone] = useState(false);
   const [starredProjects, setStarredProjects] = useState<Set<string>>(loadStarredProjects);
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
@@ -67,9 +62,13 @@ export function Board() {
   const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
   const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState('');
+  const [filterComponents, setFilterComponents] = useState<Set<string>>(new Set());
+  const [componentDropdownOpen, setComponentDropdownOpen] = useState(false);
+  const [componentSearch, setComponentSearch] = useState('');
   const [sortByDueDate, setSortByDueDate] = useState(false);
   const [includeDone, setIncludeDone] = useState(false);
   const labelDropdownRef = useRef<HTMLDivElement>(null);
+  const componentDropdownRef = useRef<HTMLDivElement>(null);
 
   const toggleStarProject = (key: string) => {
     setStarredProjects((prev) => {
@@ -86,6 +85,10 @@ export function Board() {
         setLabelDropdownOpen(false);
         setLabelSearch('');
       }
+      if (componentDropdownRef.current && !componentDropdownRef.current.contains(e.target as Node)) {
+        setComponentDropdownOpen(false);
+        setComponentSearch('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -96,6 +99,15 @@ export function Board() {
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
+      return next;
+    });
+  };
+
+  const toggleComponent = (component: string) => {
+    setFilterComponents((prev) => {
+      const next = new Set(prev);
+      if (next.has(component)) next.delete(component);
+      else next.add(component);
       return next;
     });
   };
@@ -144,29 +156,6 @@ export function Board() {
     queryFn: getCurrentUser,
     enabled: configured,
     staleTime: 1000 * 60 * 30,
-  });
-
-  const { data: transitions } = useQuery({
-    queryKey: ['transitions', selectedIssue?.key],
-    queryFn: () => getTransitions(selectedIssue!.key),
-    enabled: !!selectedIssue,
-  });
-
-  const { mutate: doTransition, isPending: changingStatus } = useMutation({
-    mutationFn: (vars: { transitionId: string; toStatusName: string; toCategoryKey: string }) =>
-      transitionIssue(selectedIssue!.key, vars.transitionId),
-    onSuccess: (_, vars) => {
-      const category = vars.toCategoryKey as 'new' | 'indeterminate' | 'done';
-      const updatedStatus = { id: selectedIssue!.status.id, name: vars.toStatusName, category };
-      // Oppdater cache og modal
-      queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
-        (old ?? []).map((issue) =>
-          issue.key === selectedIssue?.key ? { ...issue, status: updatedStatus } : issue
-        )
-      );
-      setSelectedIssue((prev) => (prev ? { ...prev, status: updatedStatus } : null));
-      queryClient.invalidateQueries({ queryKey: ['boardIssues'] });
-    },
   });
 
   const handleDragEnd = async (result: DropResult) => {
@@ -273,6 +262,9 @@ export function Board() {
   const availableLabels = [...new Set(
     displayedIssues.flatMap((i) => i.labels ?? [])
   )].sort();
+  const availableComponents = [...new Set(
+    displayedIssues.flatMap((i) => (i.components ?? []).map((c) => c.name))
+  )].sort();
 
   const availableIssueTypes = [...new Map(
     displayedIssues.map((i) => [i.issueType.name, i.issueType])
@@ -316,6 +308,13 @@ export function Board() {
       );
     }
 
+    // Komponent-filter (saken må ha alle valgte komponenter)
+    if (filterComponents.size > 0) {
+      result = result.filter((issue) =>
+        [...filterComponents].every((comp) => (issue.components ?? []).some((c) => c.name === comp))
+      );
+    }
+
     // Sortering på forfallsdato
     if (sortByDueDate) {
       result = [...result].sort((a, b) => {
@@ -332,11 +331,15 @@ export function Board() {
   const matchesLabelFilter = (issue: JiraIssue) =>
     filterLabels.size === 0 || [...filterLabels].every((l) => (issue.labels ?? []).includes(l));
 
+  const matchesComponentFilter = (issue: JiraIssue) =>
+    filterComponents.size === 0 || [...filterComponents].every((comp) => (issue.components ?? []).some((c) => c.name === comp));
+
   // Timeline filtering: all shared filters apply
   const timelineIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
+    if (!matchesComponentFilter(issue)) return false;
     if (filterStatus) {
       if (filterStatus.startsWith('cat:')) {
         if (issue.status.category !== filterStatus.slice(4)) return false;
@@ -348,11 +351,12 @@ export function Board() {
     return true;
   });
 
-  // List filtering: priority/assignee/label/status/issueType filters apply
+  // List filtering: priority/assignee/label/component/status/issueType filters apply
   const listIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
+    if (!matchesComponentFilter(issue)) return false;
     if (filterStatus) {
       if (filterStatus.startsWith('cat:')) {
         if (issue.status.category !== filterStatus.slice(4)) return false;
@@ -364,11 +368,12 @@ export function Board() {
     return true;
   });
 
-  // Pulse filtering: priority/assignee/label filters apply; category filtering handled inside ProjectPulse
+  // Pulse filtering: priority/assignee/label/component filters apply; category filtering handled inside ProjectPulse
   const pulseIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
     if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
+    if (!matchesComponentFilter(issue)) return false;
     return true;
   });
 
@@ -390,6 +395,7 @@ export function Board() {
       if (filterPriority && issue.priority?.name !== filterPriority) return false;
       if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
       if (!matchesLabelFilter(issue)) return false;
+      if (!matchesComponentFilter(issue)) return false;
       return true;
     })
     .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
@@ -748,6 +754,50 @@ export function Board() {
               </div>
             )}
 
+            {availableComponents.length > 0 && (
+              <div className={styles.labelDropdownWrapper} ref={componentDropdownRef}>
+                <button
+                  className={`${styles.sortButton} ${filterComponents.size > 0 ? styles.sortButtonActive : ''}`}
+                  onClick={() => { setComponentDropdownOpen((v) => !v); setComponentSearch(''); }}
+                  title="Filtrer på komponenter"
+                >
+                  <Layers size={14} />
+                  Komponent{filterComponents.size > 0 ? ` (${filterComponents.size})` : ''}
+                  <ChevronDown size={12} />
+                </button>
+                {componentDropdownOpen && (
+                  <div className={styles.labelDropdown}>
+                    <div className={styles.labelSearchWrapper}>
+                      <input
+                        type="text"
+                        className={styles.labelSearchInput}
+                        placeholder="Søk komponenter…"
+                        value={componentSearch}
+                        onChange={(e) => setComponentSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className={styles.labelOptionList}>
+                      {availableComponents
+                        .filter((comp) =>
+                          comp.toLowerCase().includes(componentSearch.toLowerCase())
+                        )
+                        .map((comp) => (
+                          <label key={comp} className={styles.labelOption}>
+                            <input
+                              type="checkbox"
+                              checked={filterComponents.has(comp)}
+                              onChange={() => toggleComponent(comp)}
+                            />
+                            <span>{comp}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {(mode === 'list' || mode === 'timeline') && availableIssueTypes.length > 0 && (
               <select
                 className={styles.filterSelect}
@@ -794,10 +844,10 @@ export function Board() {
               </button>
             )}
 
-            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterStatus || filterIssueType || sortByDueDate) && (
+            {(filterPriority || filterAssignee || filterLabels.size > 0 || filterComponents.size > 0 || filterStatus || filterIssueType || sortByDueDate) && (
               <button
                 className={styles.clearFiltersButton}
-                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterStatus(''); setFilterIssueType(''); setSortByDueDate(false); }}
+                onClick={() => { setFilterPriority(''); setFilterAssignee(''); setFilterLabels(new Set()); setFilterComponents(new Set()); setFilterStatus(''); setFilterIssueType(''); setSortByDueDate(false); }}
                 title="Fjern alle filtre"
               >
                 <X size={14} />
@@ -996,236 +1046,21 @@ export function Board() {
 
       {/* Sak-detalj-modal */}
       {selectedIssue && (
-        <Modal
+        <IssueModal
+          issue={selectedIssue}
+          jiraBaseUrl={jiraBaseUrl}
           isOpen={!!selectedIssue}
-          onClose={() => { setSelectedIssue(null); setTodoCreated(false); setShowTodoForm(false); }}
-          title={selectedIssue.key}
-          size="md"
-        >
-          <div className={styles.modalContent}>
-            <h2 className={styles.modalTitle}>{selectedIssue.summary}</h2>
-
-            <div className={styles.modalMeta}>
-              <div className={styles.metaItem}>
-                <span className={styles.metaLabel}>Status</span>
-                <Badge
-                  variant={
-                    selectedIssue.status.category === 'done'
-                      ? 'success'
-                      : selectedIssue.status.category === 'indeterminate'
-                      ? 'primary'
-                      : 'default'
-                  }
-                >
-                  {selectedIssue.status.name}
-                </Badge>
-              </div>
-              {selectedIssue.priority && (
-                <div className={styles.metaItem}>
-                  <span className={styles.metaLabel}>Prioritet</span>
-                  <Badge variant={getPriorityVariant(selectedIssue.priority.name)}>
-                    {selectedIssue.priority.name}
-                  </Badge>
-                </div>
-              )}
-              {selectedIssue.assignee && (
-                <div className={styles.metaItem}>
-                  <span className={styles.metaLabel}>Ansvarlig</span>
-                  <span>{selectedIssue.assignee.displayName}</span>
-                </div>
-              )}
-              {selectedIssue.dueDate && (
-                <div className={styles.metaItem}>
-                  <span className={styles.metaLabel}>Frist</span>
-                  <span
-                    className={isOverdue(selectedIssue.dueDate) ? styles.overdue : ''}
-                  >
-                    {new Date(selectedIssue.dueDate).toLocaleDateString('nb-NO')}
-                  </span>
-                </div>
-              )}
-              {selectedIssue.labels && selectedIssue.labels.length > 0 && (
-                <div className={styles.metaItem}>
-                  <span className={styles.metaLabel}>Etiketter</span>
-                  <div className={styles.modalLabels}>
-                    {selectedIssue.labels.map((label) => (
-                      <span key={label} className={styles.cardLabel}>{label}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {selectedIssue.description && (
-              <div className={styles.modalDescription}>
-                <span className={styles.metaLabel}>Beskrivelse</span>
-                <p>{selectedIssue.description}</p>
-              </div>
-            )}
-
-            {transitions && transitions.length > 0 && (
-              <div className={styles.modalSection}>
-                <span className={styles.metaLabel}>Flytt til</span>
-                <div className={styles.transitionButtons}>
-                  {transitions.map((t) => (
-                    <Button
-                      key={t.id}
-                      size="sm"
-                      variant="secondary"
-                      disabled={changingStatus}
-                      onClick={() =>
-                        doTransition({
-                          transitionId: t.id,
-                          toStatusName: t.to.name,
-                          toCategoryKey: t.to.statusCategoryKey,
-                        })
-                      }
-                    >
-                      {t.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectedIssue.links && selectedIssue.links.length > 0 && (
-              <div className={styles.modalSection}>
-                <span className={styles.metaLabel}>Avhengigheter</span>
-                <div className={styles.dependencyList}>
-                  {selectedIssue.links.map((link) => {
-                    const linkedIssue = link.inwardIssue ?? link.outwardIssue;
-                    const direction = link.inwardIssue ? link.type.inward : link.type.outward;
-                    if (!linkedIssue) return null;
-                    const typeLower = link.type.name.toLowerCase();
-                    const isBlocked = !!link.inwardIssue && (typeLower.includes('block') || typeLower.includes('blokkerer'));
-                    const isBlocking = !!link.outwardIssue && (typeLower.includes('block') || typeLower.includes('blokkerer'));
-                    const depClass = isBlocked
-                      ? styles.depBlocked
-                      : isBlocking
-                      ? styles.depBlocking
-                      : styles.depRelated;
-                    return (
-                      <div key={link.id} className={`${styles.dependencyItem} ${depClass}`}>
-                        <span className={styles.depDirection}>{direction}</span>
-                        {linkedIssue.issueType?.iconUrl && (
-                          <img src={linkedIssue.issueType.iconUrl} alt="" className={styles.depIcon} />
-                        )}
-                        <a
-                          href={`${jiraBaseUrl}/browse/${linkedIssue.key}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={styles.depKey}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {linkedIssue.key}
-                        </a>
-                        <span className={styles.depSummary}>{linkedIssue.summary}</span>
-                        <Badge
-                          variant={
-                            linkedIssue.status.category === 'done'
-                              ? 'success'
-                              : linkedIssue.status.category === 'indeterminate'
-                              ? 'primary'
-                              : 'default'
-                          }
-                          size="sm"
-                        >
-                          {linkedIssue.status.name}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {showTodoForm && !todoCreated && (
-              <div className={styles.todoForm}>
-                <div className={styles.todoFormFields}>
-                  <div className={styles.todoFormField}>
-                    <label className={styles.todoFormLabel}>Prioritet</label>
-                    <select
-                      className={styles.todoFormSelect}
-                      value={todoPriority}
-                      onChange={(e) => setTodoPriority(e.target.value as 'low' | 'medium' | 'high')}
-                    >
-                      <option value="low">Lav</option>
-                      <option value="medium">Middels</option>
-                      <option value="high">Høy</option>
-                    </select>
-                  </div>
-                  <div className={styles.todoFormField}>
-                    <label className={styles.todoFormLabel}>Forfallsdato</label>
-                    <input
-                      type="date"
-                      className={styles.todoFormDate}
-                      value={todoDueDate}
-                      onChange={(e) => setTodoDueDate(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className={styles.modalActions}>
-              {todoCreated ? (
-                <span className={styles.todoCreatedConfirm}>
-                  <Check size={14} /> Todo opprettet!
-                </span>
-              ) : showTodoForm ? (
-                <>
-                  <button
-                    className={styles.createTodoBtn}
-                    onClick={() => {
-                      addTodo({
-                        content: `[${selectedIssue.key}] ${selectedIssue.summary}`,
-                        priority: todoPriority,
-                        dueDate: todoDueDate ? new Date(todoDueDate).toISOString() : undefined,
-                        linkedJiraIssue: selectedIssue.key,
-                      });
-                      setTodoCreated(true);
-                      setShowTodoForm(false);
-                      setTimeout(() => setTodoCreated(false), 2000);
-                    }}
-                  >
-                    <CheckSquare size={14} />
-                    Lagre todo
-                  </button>
-                  <button
-                    className={styles.cancelTodoBtn}
-                    onClick={() => setShowTodoForm(false)}
-                  >
-                    Avbryt
-                  </button>
-                </>
-              ) : (
-                <button
-                  className={styles.createTodoBtn}
-                  onClick={() => {
-                    const p = selectedIssue.priority?.name?.toLowerCase();
-                    setTodoPriority(p === 'high' || p === 'highest' ? 'high' : p === 'medium' ? 'medium' : 'low');
-                    setTodoDueDate(selectedIssue.dueDate?.split('T')[0] ?? '');
-                    setShowTodoForm(true);
-                  }}
-                  disabled={getTodosByJiraIssue(selectedIssue.key).some((t) => !t.completed)}
-                  title={getTodosByJiraIssue(selectedIssue.key).some((t) => !t.completed) ? 'Aktiv todo finnes allerede' : 'Opprett todo'}
-                >
-                  <CheckSquare size={14} />
-                  Opprett todo
-                </button>
-              )}
-              <a
-                href={`${jiraBaseUrl}/browse/${selectedIssue.key}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.openInJiraBtn}
-              >
-                Åpne i Jira
-                <ExternalLink size={14} />
-              </a>
-            </div>
-          </div>
-        </Modal>
+          onClose={() => setSelectedIssue(null)}
+          onTransitioned={(issueKey, newStatus) => {
+            queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
+              (old ?? []).map((issue) =>
+                issue.key === issueKey ? { ...issue, status: newStatus } : issue
+              )
+            );
+            setSelectedIssue((prev) => (prev ? { ...prev, status: newStatus } : null));
+            queryClient.invalidateQueries({ queryKey: ['boardIssues'] });
+          }}
+        />
       )}
     </div>
   );
