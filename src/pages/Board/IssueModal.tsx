@@ -44,17 +44,19 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
   });
 
   const { mutate: doTransition, isPending: changingStatus } = useMutation({
-    mutationFn: (vars: { transitionId: string; toStatusName: string; toCategoryKey: string }) =>
+    mutationFn: (vars: { transitionId: string; toStatusId: string; toStatusName: string; toCategoryKey: string }) =>
       transitionIssue(issue.key, vars.transitionId),
     onSuccess: (_, vars) => {
       const category = vars.toCategoryKey as 'new' | 'indeterminate' | 'done';
-      onTransitioned?.(issue.key, { id: issue.status.id, name: vars.toStatusName, category });
+      onTransitioned?.(issue.key, { id: vars.toStatusId, name: vars.toStatusName, category });
     },
   });
 
   const handleClose = () => {
     setShowTodoForm(false);
     setTodoCreated(false);
+    setTodoPriority('medium');
+    setTodoDueDate('');
     onClose();
   };
 
@@ -132,6 +134,7 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
                   onClick={() =>
                     doTransition({
                       transitionId: t.id,
+                      toStatusId: t.to.id,
                       toStatusName: t.to.name,
                       toCategoryKey: t.to.statusCategoryKey,
                     })
