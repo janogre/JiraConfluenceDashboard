@@ -58,6 +58,7 @@ interface JiraApiIssue {
     duedate?: string;
     resolutiondate?: string;
     labels?: string[];
+    components?: Array<{ id: string; name: string }>;
     subtasks?: Array<{
       id: string;
       key: string;
@@ -235,6 +236,7 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
     })(),
     resolutionDate: apiIssue.fields.resolutiondate,
     labels: apiIssue.fields.labels || [],
+    components: apiIssue.fields.components || [],
     subtasks: apiIssue.fields.subtasks?.map((s): JiraSubtask => ({
       id: s.id,
       key: s.key,
@@ -311,7 +313,7 @@ export async function getProject(projectKey: string): Promise<JiraProject> {
 const ISSUE_FIELDS = [
   'summary', 'description', 'status', 'priority', 'assignee', 'reporter',
   'project', 'issuetype', 'created', 'updated', 'duedate', 'resolutiondate',
-  'labels', 'subtasks', 'startDate', 'customfield_10015', 'parent', 'issuelinks',
+  'labels', 'components', 'subtasks', 'startDate', 'customfield_10015', 'parent', 'issuelinks',
 ];
 
 function buildIssueFields(): string[] {
@@ -372,7 +374,7 @@ export async function getIssue(issueKey: string): Promise<JiraIssue> {
     `${baseUrl}/rest/api/3/issue/${issueKey}`,
     {
       params: {
-        fields: 'summary,description,status,priority,assignee,reporter,project,issuetype,created,updated,duedate,resolutiondate,labels',
+        fields: 'summary,description,status,priority,assignee,reporter,project,issuetype,created,updated,duedate,resolutiondate,labels,components',
       },
     }
   );
@@ -760,4 +762,61 @@ export async function runFilter(filterId: string): Promise<JiraIssue[]> {
 
   // Then run the JQL
   return getIssues(undefined, filterResponse.data.jql);
+}
+
+export async function getIssuesByComponents(componentNames: string[]): Promise<JiraIssue[]> {
+  if (componentNames.length === 0) return [];
+  const list = componentNames.map((c) => `"${c}"`).join(', ');
+  const jql = `component in (${list}) ORDER BY updated DESC`;
+  return getIssues(undefined, jql, true);
+}
+
+export async function searchUsers(query: string): Promise<JiraUser[]> {
+  if (!query.trim()) return [];
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+  const response = await api.get<Array<{
+    accountId: string;
+    displayName: string;
+    emailAddress?: string;
+    avatarUrls?: { '48x48'?: string };
+    active: boolean;
+  }>>(`${baseUrl}/rest/api/3/user/search`, {
+    params: { query, maxResults: 10 },
+  });
+  return response.data
+    .filter((u) => u.active)
+    .map((u) => ({
+      accountId: u.accountId,
+      displayName: u.displayName,
+      emailAddress: u.emailAddress,
+      avatarUrl: u.avatarUrls?.['48x48'],
+      active: u.active,
+    }));
+}
+
+export async function getAllProjectComponents(): Promise<{ id: string; name: string }[]> {
+  const projects = await getProjects();
+  const api = getApi();
+  const baseUrl = getJiraBaseUrl();
+
+  const results = await Promise.all(
+    projects.map(async (project) => {
+      try {
+        const response = await api.get<Array<{ id: string; name: string }>>(
+          `${baseUrl}/rest/api/3/project/${project.key}/components`
+        );
+        return response.data.map((c) => ({ id: c.id, name: c.name }));
+      } catch {
+        return [];
+      }
+    })
+  );
+
+  const seen = new Set<string>();
+  return results.flat().filter((c) => {
+    if (seen.has(c.name)) return false;
+    seen.add(c.name);
+    return true;
+  });
 }
