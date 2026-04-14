@@ -56,7 +56,7 @@ export function TeamUnassigned({ teamName, componentNames }: TeamUnassignedProps
       queryClient.setQueryData<JiraIssue[]>(queryKey, (old) =>
         (old ?? []).map((i) =>
           i.key === issueKey
-            ? { ...i, assignee: { displayName, avatarUrl: undefined } }
+            ? { ...i, assignee: { displayName } }
             : i
         )
       );
