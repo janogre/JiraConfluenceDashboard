@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { getIssuesByComponents } from '../../services/jiraService';
 import { getJiraBaseUrl, isConfigured } from '../../services/api';
 import { IssueModal } from '../Board/IssueModal';
-import { IssueList } from '../Board/IssueList';
+import { TeamIssueList } from './TeamIssueList';
 import type { JiraIssue } from '../../types';
 import type { TeamName } from '../../store/teamStore';
 import styles from './Team.module.css';
@@ -30,6 +30,8 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
   const [filterPriority, setFilterPriority] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterComponent, setFilterComponent] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
+  const [filterLabel, setFilterLabel] = useState('');
   const queryClient = useQueryClient();
   const jiraBaseUrl = getJiraBaseUrl();
   const configured = isConfigured();
@@ -81,8 +83,10 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
       }
     }
     if (filterComponent && !i.components.some((c) => c.name === filterComponent)) return false;
+    if (filterAssignee && i.assignee?.displayName !== filterAssignee) return false;
+    if (filterLabel && !(i.labels ?? []).includes(filterLabel)) return false;
     return true;
-  }), [issues, filterPriority, filterStatus, filterComponent]);
+  }), [issues, filterPriority, filterStatus, filterComponent, filterAssignee, filterLabel]);
 
   const availablePriorities = useMemo(
     () => [...new Set(issues.map((i) => i.priority?.name).filter(Boolean) as string[])],
@@ -95,6 +99,34 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
     }),
     [issues]
   );
+
+  const availableAssignees = useMemo(
+    () => [...new Set(issues.filter((i) => i.assignee).map((i) => i.assignee!.displayName))].sort(),
+    [issues]
+  );
+  const availableLabels = useMemo(
+    () => [...new Set(issues.flatMap((i) => i.labels ?? []))].sort(),
+    [issues]
+  );
+
+  // Hierarkisk saksliste fra filtrerte resultater
+  const filteredChildrenMap = useMemo(() => {
+    const filteredKeys = new Set(filteredIssues.map((i) => i.key));
+    const map = new Map<string, JiraIssue[]>();
+    filteredIssues.forEach((i) => {
+      const parentKey = i.parent?.key;
+      if (parentKey && filteredKeys.has(parentKey)) {
+        if (!map.has(parentKey)) map.set(parentKey, []);
+        map.get(parentKey)!.push(i);
+      }
+    });
+    return map;
+  }, [filteredIssues]);
+
+  const filteredTopLevelIssues = useMemo(() => {
+    const filteredKeys = new Set(filteredIssues.map((i) => i.key));
+    return filteredIssues.filter((i) => !i.parent?.key || !filteredKeys.has(i.parent.key));
+  }, [filteredIssues]);
 
   if (isLoading) return <div className={styles.loadingState}>Laster saker…</div>;
 
@@ -236,6 +268,30 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
                 ))}
               </select>
             )}
+            {availableAssignees.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+              >
+                <option value="">Alle tildelte</option>
+                {availableAssignees.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            )}
+            {availableLabels.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterLabel}
+                onChange={(e) => setFilterLabel(e.target.value)}
+              >
+                <option value="">Alle etiketter</option>
+                {availableLabels.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            )}
             <button
               onClick={() => refetch()}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}
@@ -245,8 +301,9 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
             </button>
           </div>
         </div>
-        <IssueList
-          issues={filteredIssues}
+        <TeamIssueList
+          issues={filteredTopLevelIssues}
+          childrenMap={filteredChildrenMap}
           jiraBaseUrl={jiraBaseUrl}
           onIssueClick={setSelectedIssue}
         />
