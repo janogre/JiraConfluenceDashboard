@@ -81,6 +81,8 @@ export interface JiraIssue {
   startDate?: string;
   resolutionDate?: string;
   labels: string[];
+  kategori?: string;
+  components: { id: string; name: string }[];
   subtasks?: JiraSubtask[];
   links?: JiraIssueLink[];
   parent?: {

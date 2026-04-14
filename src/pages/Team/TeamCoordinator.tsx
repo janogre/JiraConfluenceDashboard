@@ -32,6 +32,7 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
   const [filterComponent, setFilterComponent] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterLabel, setFilterLabel] = useState('');
+  const [filterKategori, setFilterKategori] = useState('');
   const queryClient = useQueryClient();
   const jiraBaseUrl = getJiraBaseUrl();
   const configured = isConfigured();
@@ -85,8 +86,9 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
     if (filterComponent && !i.components.some((c) => c.name === filterComponent)) return false;
     if (filterAssignee && i.assignee?.displayName !== filterAssignee) return false;
     if (filterLabel && !(i.labels ?? []).includes(filterLabel)) return false;
+    if (filterKategori && i.kategori !== filterKategori) return false;
     return true;
-  }), [issues, filterPriority, filterStatus, filterComponent, filterAssignee, filterLabel]);
+  }), [issues, filterPriority, filterStatus, filterComponent, filterAssignee, filterLabel, filterKategori]);
 
   const availablePriorities = useMemo(
     () => [...new Set(issues.map((i) => i.priority?.name).filter(Boolean) as string[])],
@@ -106,6 +108,10 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
   );
   const availableLabels = useMemo(
     () => [...new Set(issues.flatMap((i) => i.labels ?? []))].sort(),
+    [issues]
+  );
+  const availableKategorier = useMemo(
+    () => [...new Set(issues.map((i) => i.kategori).filter(Boolean) as string[])].sort(),
     [issues]
   );
 
@@ -289,6 +295,18 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
                 <option value="">Alle etiketter</option>
                 {availableLabels.map((l) => (
                   <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            )}
+            {availableKategorier.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterKategori}
+                onChange={(e) => setFilterKategori(e.target.value)}
+              >
+                <option value="">Alle kategorier</option>
+                {availableKategorier.map((k) => (
+                  <option key={k} value={k}>{k}</option>
                 ))}
               </select>
             )}

@@ -3,6 +3,7 @@ import { ChevronRight, ChevronUp, ChevronDown, AlertOctagon } from 'lucide-react
 import { Badge } from '../../components/common';
 import type { JiraIssue } from '../../types';
 import listStyles from '../Board/IssueList.module.css';
+import teamStyles from './Team.module.css';
 
 interface TeamIssueListProps {
   issues: JiraIssue[];
@@ -79,7 +80,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
 
   return (
     <div className={listStyles.wrapper}>
-      <div className={listStyles.table}>
+      <div className={`${listStyles.table} ${teamStyles.teamIssueTable}`}>
         {/* Header */}
         <div className={listStyles.headerRow}>
           <div className={listStyles.colType} />
@@ -90,6 +91,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
           <button className={listStyles.colHeader} onClick={() => handleSort('assignee')}>Tildelt <SortIcon col="assignee" /></button>
           <button className={listStyles.colHeader} onClick={() => handleSort('dueDate')}>Frist <SortIcon col="dueDate" /></button>
           <div className={listStyles.colHeader}>Etiketter</div>
+          <div className={listStyles.colHeader}>Kategori</div>
           <button className={listStyles.colHeader} onClick={() => handleSort('updated')}>Oppdatert <SortIcon col="updated" /></button>
           <div className={listStyles.colType} />
         </div>
@@ -190,6 +192,11 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                   )}
                 </div>
                 <div className={listStyles.colData}>
+                  {issue.kategori && (
+                    <span className={listStyles.label}>{issue.kategori}</span>
+                  )}
+                </div>
+                <div className={listStyles.colData}>
                   <span className={listStyles.updated}>
                     {new Date(issue.updated).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
                   </span>
@@ -197,44 +204,69 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                 <div className={listStyles.colData} />
               </div>
 
-              {/* Children — grid-column: 1/-1 */}
+              {/* Children — grid-column: 1/-1, kolonner justert mot foreldrerad */}
               {hasChildren && isExpanded && (
                 <div className={listStyles.childGroupCell}>
                   {children.map((child) => (
                     <div
                       key={child.key}
-                      className={listStyles.childItemRow}
+                      className={teamStyles.teamChildItemRow}
                       onClick={() => onIssueClick(child)}
                     >
-                      {child.issueType.iconUrl && (
-                        <img src={child.issueType.iconUrl} alt={child.issueType.name} className={listStyles.typeIcon} title={child.issueType.name} />
-                      )}
-                      <a
-                        href={`${jiraBaseUrl}/browse/${child.key}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={listStyles.childKey}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {child.key}
-                      </a>
-                      <span className={listStyles.childSummary} title={child.summary}>{child.summary}</span>
-                      <div className={listStyles.childMeta}>
+                      {/* Kol 1: type-ikon */}
+                      <div className={listStyles.colType}>
+                        {child.issueType.iconUrl && (
+                          <img src={child.issueType.iconUrl} alt={child.issueType.name} className={listStyles.typeIcon} title={child.issueType.name} />
+                        )}
+                      </div>
+                      {/* Kol 2: nøkkel */}
+                      <div className={listStyles.colData}>
+                        <a
+                          href={`${jiraBaseUrl}/browse/${child.key}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={listStyles.issueKey}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {child.key}
+                        </a>
+                      </div>
+                      {/* Kol 3: tittel */}
+                      <div className={`${listStyles.colData} ${listStyles.colSummary}`}>
+                        <span className={listStyles.summary}>{child.summary}</span>
+                      </div>
+                      {/* Kol 4: status */}
+                      <div className={listStyles.colData}>
                         <Badge
                           variant={child.status.category === 'done' ? 'success' : child.status.category === 'indeterminate' ? 'primary' : 'default'}
                           size="sm"
                         >
                           {child.status.name}
                         </Badge>
-                        {child.assignee && (
-                          <span className={listStyles.childAssigneeName}>{child.assignee.displayName}</span>
-                        )}
+                      </div>
+                      {/* Kol 5: prioritet */}
+                      <div className={listStyles.colData}>
                         {child.priority && (
                           <Badge variant={getPriorityVariant(child.priority.name)} size="sm">
                             {child.priority.name}
                           </Badge>
                         )}
                       </div>
+                      {/* Kol 6: tildelt */}
+                      <div className={listStyles.colData}>
+                        {child.assignee && (
+                          <div className={listStyles.assignee}>
+                            {child.assignee.avatarUrl ? (
+                              <img src={child.assignee.avatarUrl} alt={child.assignee.displayName} className={listStyles.avatar} />
+                            ) : (
+                              <div className={listStyles.avatarInitial}>{child.assignee.displayName.charAt(0)}</div>
+                            )}
+                            <span className={listStyles.assigneeName}>{child.assignee.displayName}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Kol 7–11: frist, etiketter, kategori, oppdatert, handling — tomme */}
+                      <div /><div /><div /><div /><div />
                     </div>
                   ))}
                 </div>

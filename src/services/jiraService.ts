@@ -119,15 +119,17 @@ interface JiraApiProject {
   };
 }
 
-// Module-level cache for all discovered start date field keys (array, or null if discovery ran but found nothing)
+// Module-level cache for discovered custom field keys
 let _startDateFieldKeys: string[] | null | undefined = undefined;
+let _categoryFieldKey: string | null | undefined = undefined;
 
 export function resetFieldDiscoveryCache(): void {
   _startDateFieldKeys = undefined;
+  _categoryFieldKey = undefined;
 }
 
-async function discoverStartDateFieldKeys(): Promise<void> {
-  if (_startDateFieldKeys !== undefined) return;
+async function discoverCustomFields(): Promise<void> {
+  if (_startDateFieldKeys !== undefined && _categoryFieldKey !== undefined) return;
   try {
     const api = getApi();
     const baseUrl = getJiraBaseUrl();
@@ -137,15 +139,22 @@ async function discoverStartDateFieldKeys(): Promise<void> {
       schema?: { type?: string; system?: string; custom?: string };
     }>>(`${baseUrl}/rest/api/3/field`);
 
-    const startDateNames = new Set(['start date', 'startdato', 'start dato']);
-    const fields = response.data.filter(
-      (f) =>
-        startDateNames.has(f.name.toLowerCase()) &&
-        f.schema?.type === 'date'
-    );
-    _startDateFieldKeys = fields.length > 0 ? fields.map((f) => f.id) : null;
+    if (_startDateFieldKeys === undefined) {
+      const startDateNames = new Set(['start date', 'startdato', 'start dato']);
+      const startFields = response.data.filter(
+        (f) => startDateNames.has(f.name.toLowerCase()) && f.schema?.type === 'date'
+      );
+      _startDateFieldKeys = startFields.length > 0 ? startFields.map((f) => f.id) : null;
+    }
+
+    if (_categoryFieldKey === undefined) {
+      const categoryNames = new Set(['kategori', 'category']);
+      const catField = response.data.find((f) => categoryNames.has(f.name.toLowerCase()));
+      _categoryFieldKey = catField?.id ?? null;
+    }
   } catch {
     _startDateFieldKeys = null;
+    _categoryFieldKey = null;
   }
 }
 
@@ -236,6 +245,15 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
     })(),
     resolutionDate: apiIssue.fields.resolutiondate,
     labels: apiIssue.fields.labels || [],
+    kategori: (() => {
+      if (!_categoryFieldKey) return undefined;
+      const raw = apiIssue.fields as unknown as Record<string, unknown>;
+      const val = raw[_categoryFieldKey];
+      if (!val) return undefined;
+      if (typeof val === 'string') return val;
+      if (typeof val === 'object' && val !== null && 'value' in val) return (val as { value: string }).value;
+      return undefined;
+    })(),
     components: apiIssue.fields.components || [],
     subtasks: apiIssue.fields.subtasks?.map((s): JiraSubtask => ({
       id: s.id,
@@ -321,11 +339,14 @@ function buildIssueFields(): string[] {
   for (const key of (_startDateFieldKeys ?? [])) {
     if (!fields.includes(key)) fields.push(key);
   }
+  if (_categoryFieldKey && !fields.includes(_categoryFieldKey)) {
+    fields.push(_categoryFieldKey);
+  }
   return fields;
 }
 
 export async function getIssues(projectKey?: string, jql?: string, fetchAll = false): Promise<JiraIssue[]> {
-  await discoverStartDateFieldKeys();
+  await discoverCustomFields();
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
   const fieldsParam = buildIssueFields().join(',');
@@ -657,7 +678,7 @@ export async function getSprints(projectKey: string): Promise<JiraSprint[]> {
 
 // Get issues for a specific sprint
 export async function getSprintIssues(sprintId: number): Promise<JiraIssue[]> {
-  await discoverStartDateFieldKeys();
+  await discoverCustomFields();
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
   const fieldsParam = buildIssueFields().join(',');
