@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { getIssuesByComponents } from '../../services/jiraService';
@@ -16,8 +16,13 @@ interface TeamCoordinatorProps {
 
 const today = new Date(new Date().toDateString());
 
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function isOverdue(dateStr?: string): boolean {
-  return !!dateStr && new Date(dateStr) < today;
+  return !!dateStr && parseLocalDate(dateStr) < today;
 }
 
 export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorProps) {
@@ -38,30 +43,35 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
   });
 
   // Statistikk
-  const openIssues = issues.filter((i) => i.status.category !== 'done');
-  const overdueIssues = issues.filter((i) => i.status.category !== 'done' && isOverdue(i.dueDate));
-  const unassignedIssues = issues.filter((i) => !i.assignee);
-  const highPriorityIssues = issues.filter(
-    (i) => i.status.category !== 'done' && (i.priority?.name === 'High' || i.priority?.name === 'Highest')
+  const openIssues = useMemo(() => issues.filter((i) => i.status.category !== 'done'), [issues]);
+  const overdueIssues = useMemo(() => issues.filter((i) => i.status.category !== 'done' && isOverdue(i.dueDate)), [issues]);
+  const unassignedIssues = useMemo(() => issues.filter((i) => !i.assignee), [issues]);
+  const highPriorityIssues = useMemo(
+    () => issues.filter((i) => i.status.category !== 'done' && (i.priority?.name === 'High' || i.priority?.name === 'Highest')),
+    [issues]
   );
 
   // Arbeidsbelastning per person
-  const workloadMap = new Map<string, number>();
-  issues.filter((i) => i.assignee).forEach((i) => {
-    const name = i.assignee!.displayName;
-    workloadMap.set(name, (workloadMap.get(name) ?? 0) + 1);
-  });
-  const workloadEntries = [...workloadMap.entries()].sort((a, b) => b[1] - a[1]);
-  const maxWorkload = workloadEntries[0]?.[1] ?? 1;
+  const { workloadEntries, maxWorkload } = useMemo(() => {
+    const map = new Map<string, number>();
+    issues.filter((i) => i.assignee).forEach((i) => {
+      const name = i.assignee!.displayName;
+      map.set(name, (map.get(name) ?? 0) + 1);
+    });
+    const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
+    return { workloadEntries: entries, maxWorkload: entries[0]?.[1] ?? 1 };
+  }, [issues]);
 
   // Statusfordeling
-  const doneCount = issues.filter((i) => i.status.category === 'done').length;
-  const inProgressCount = issues.filter((i) => i.status.category === 'indeterminate').length;
-  const todoCount = issues.filter((i) => i.status.category === 'new').length;
-  const total = issues.length || 1;
+  const { doneCount, inProgressCount, todoCount, total } = useMemo(() => ({
+    doneCount: issues.filter((i) => i.status.category === 'done').length,
+    inProgressCount: issues.filter((i) => i.status.category === 'indeterminate').length,
+    todoCount: issues.filter((i) => i.status.category === 'new').length,
+    total: issues.length || 1,
+  }), [issues]);
 
   // Filtrert saksliste
-  const filteredIssues = issues.filter((i) => {
+  const filteredIssues = useMemo(() => issues.filter((i) => {
     if (filterPriority && i.priority?.name !== filterPriority) return false;
     if (filterStatus) {
       if (filterStatus.startsWith('cat:')) {
@@ -72,13 +82,19 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
     }
     if (filterComponent && !i.components.some((c) => c.name === filterComponent)) return false;
     return true;
-  });
+  }), [issues, filterPriority, filterStatus, filterComponent]);
 
-  const availablePriorities = [...new Set(issues.map((i) => i.priority?.name).filter(Boolean) as string[])];
-  const availableStatuses = [...new Map(issues.map((i) => [i.status.name, i.status])).values()].sort((a, b) => {
-    const order = { new: 0, indeterminate: 1, done: 2 };
-    return order[a.category] - order[b.category];
-  });
+  const availablePriorities = useMemo(
+    () => [...new Set(issues.map((i) => i.priority?.name).filter(Boolean) as string[])],
+    [issues]
+  );
+  const availableStatuses = useMemo(
+    () => [...new Map(issues.map((i) => [i.status.name, i.status])).values()].sort((a, b) => {
+      const order = { new: 0, indeterminate: 1, done: 2 };
+      return order[a.category] - order[b.category];
+    }),
+    [issues]
+  );
 
   if (isLoading) return <div className={styles.loadingState}>Laster saker…</div>;
 
