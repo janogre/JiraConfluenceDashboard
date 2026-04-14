@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { loadActiveTeam, saveActiveTeam, loadTeamConfig, TEAM_NAMES } from '../../store/teamStore';
-import type { TeamName } from '../../store/teamStore';
+import type { TeamConfig, TeamName } from '../../store/teamStore';
 import { TeamCoordinator } from './TeamCoordinator';
 import { TeamUnassigned } from './TeamUnassigned';
 import styles from './Team.module.css';
@@ -11,7 +11,7 @@ type SubTab = 'koordinator' | 'utildelte';
 export function Team() {
   const [activeTeam, setActiveTeam] = useState<TeamName>(loadActiveTeam);
   const [subTab, setSubTab] = useState<SubTab>('koordinator');
-  const teamConfig = loadTeamConfig();
+  const [teamConfig] = useState<TeamConfig>(loadTeamConfig);
   const teamComponents = teamConfig[activeTeam];
 
   const handleTeamChange = (team: TeamName) => {
