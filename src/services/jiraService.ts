@@ -508,6 +508,13 @@ export async function getMyIssues(): Promise<JiraIssue[]> {
   return getIssues(undefined, 'assignee = currentUser() AND resolution = EMPTY ORDER BY updated DESC');
 }
 
+// Hent alle barn av de oppgitte foreldrenøklene (uavhengig av hvem de er tildelt)
+export async function getChildIssuesForParents(parentKeys: string[]): Promise<JiraIssue[]> {
+  if (parentKeys.length === 0) return [];
+  const keyList = parentKeys.map((k) => `"${k}"`).join(', ');
+  return getIssues(undefined, `parent IN (${keyList}) ORDER BY updated DESC`, true);
+}
+
 // Get issues the user is watching
 export async function getWatchedIssues(): Promise<JiraIssue[]> {
   return getIssues(undefined, 'watcher = currentUser() ORDER BY updated DESC');

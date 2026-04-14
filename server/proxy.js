@@ -1,208 +1,357 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import session from 'express-session';
+import FileStoreFactory from 'session-file-store';
+import crypto from 'crypto';
 
+const FileStore = FileStoreFactory(session);
 const app = express();
 const PORT = 3001;
 
 // Enable CORS for all requests
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
 
 // Parse JSON bodies
 app.use(express.json());
 
-// Health check endpoint
+// Session-håndtering
+app.use(session({
+  store: new FileStore({ path: './sessions', ttl: 3600, logFn: () => {} }),
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 1000,
+  },
+}));
+
+// ─── Token-hjelp ────────────────────────────────────────────────────────────
+
+async function refreshAccessToken(sess) {
+  if (!sess.refreshToken) throw new Error('Ingen refresh-token i session');
+  const resp = await fetch('https://auth.atlassian.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      client_id: process.env.ATLASSIAN_CLIENT_ID,
+      client_secret: process.env.ATLASSIAN_CLIENT_SECRET,
+      refresh_token: sess.refreshToken,
+    }),
+  });
+  if (!resp.ok) throw new Error('Token-refresh feilet');
+  const data = await resp.json();
+  sess.accessToken = data.access_token;
+  sess.tokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000;
+  if (data.refresh_token) sess.refreshToken = data.refresh_token;
+}
+
+async function ensureFreshToken(sess) {
+  if (sess.authMode !== 'oauth') return;
+  if (!sess.accessToken) throw new Error('Ikke autentisert');
+  if (Date.now() > (sess.tokenExpiresAt ?? 0)) {
+    await refreshAccessToken(sess);
+  }
+}
+
+// ─── Auth-endepunkter ────────────────────────────────────────────────────────
+
+// Start OAuth-flyt
+app.get('/auth/atlassian', (req, res) => {
+  const state = crypto.randomUUID();
+  req.session.oauthState = state;
+  const params = new URLSearchParams({
+    audience: 'api.atlassian.com',
+    client_id: process.env.ATLASSIAN_CLIENT_ID,
+    scope: [
+      'read:jira-work', 'write:jira-work', 'read:jira-user',
+      'read:confluence-space.summary', 'read:confluence-content.all',
+      'write:confluence-content', 'offline_access',
+    ].join(' '),
+    redirect_uri: process.env.OAUTH_REDIRECT_URI,
+    state,
+    response_type: 'code',
+    prompt: 'consent',
+  });
+  res.redirect(`https://auth.atlassian.com/authorize?${params}`);
+});
+
+// OAuth callback – bytt code mot tokens
+app.get('/auth/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!state || state !== req.session.oauthState) {
+    return res.status(400).send('Ugyldig state-parameter');
+  }
+  delete req.session.oauthState;
+
+  try {
+    const tokenResp = await fetch('https://auth.atlassian.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: process.env.ATLASSIAN_CLIENT_ID,
+        client_secret: process.env.ATLASSIAN_CLIENT_SECRET,
+        code,
+        redirect_uri: process.env.OAUTH_REDIRECT_URI,
+      }),
+    });
+
+    if (!tokenResp.ok) {
+      const err = await tokenResp.text();
+      console.error('[AUTH] Token-utveksling feilet:', err);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?auth_error=token_exchange`);
+    }
+
+    const tokens = await tokenResp.json();
+    req.session.accessToken = tokens.access_token;
+    req.session.refreshToken = tokens.refresh_token;
+    req.session.tokenExpiresAt = Date.now() + (tokens.expires_in - 60) * 1000;
+    req.session.authMode = 'oauth';
+
+    // Hent tilgjengelige Atlassian-ressurser (cloudId)
+    const resourcesResp = await fetch(
+      'https://api.atlassian.com/oauth/token/accessible-resources',
+      { headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: 'application/json' } }
+    );
+    const resources = await resourcesResp.json();
+    req.session.availableClouds = resources.map((r) => ({ id: r.id, name: r.name, url: r.url }));
+
+    // Velg første ressurs som standard
+    if (resources.length > 0) {
+      req.session.cloudId = resources[0].id;
+      req.session.cloudName = resources[0].name;
+    }
+
+    res.redirect(process.env.FRONTEND_URL || 'http://localhost:5173');
+  } catch (error) {
+    console.error('[AUTH] Callback-feil:', error.message);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?auth_error=callback`);
+  }
+});
+
+// Sjekk autentiseringsstatus
+app.get('/auth/me', (req, res) => {
+  if (req.session.authMode === 'oauth' && req.session.accessToken) {
+    return res.json({
+      authenticated: true,
+      authMode: 'oauth',
+      cloudId: req.session.cloudId,
+      cloudName: req.session.cloudName,
+      availableClouds: req.session.availableClouds ?? [],
+    });
+  }
+  if (req.session.authMode === 'apikey') {
+    return res.json({
+      authenticated: true,
+      authMode: 'apikey',
+      jiraBaseUrl: req.session.jiraBaseUrl,
+      confluenceBaseUrl: req.session.confluenceBaseUrl,
+    });
+  }
+  res.json({ authenticated: false });
+});
+
+// Velg Atlassian-instans (for brukere med tilgang til flere)
+app.post('/auth/select-cloud', (req, res) => {
+  const { cloudId } = req.body;
+  const found = (req.session.availableClouds ?? []).find((c) => c.id === cloudId);
+  if (!found) return res.status(400).json({ error: 'Ugyldig cloudId' });
+  req.session.cloudId = cloudId;
+  req.session.cloudName = found.name;
+  res.json({ ok: true });
+});
+
+// API-nøkkel-modus (lokal utvikling)
+app.post('/auth/apikey', (req, res) => {
+  const { email, apiToken, jiraBaseUrl, confluenceBaseUrl, anthropicApiKey } = req.body;
+  if (!email || !apiToken || !jiraBaseUrl) {
+    return res.status(400).json({ error: 'Mangler påkrevde felt' });
+  }
+  req.session.authMode = 'apikey';
+  req.session.apiKeyEmail = email;
+  req.session.apiKeyToken = apiToken;
+  req.session.jiraBaseUrl = jiraBaseUrl;
+  req.session.confluenceBaseUrl = confluenceBaseUrl || jiraBaseUrl;
+  if (anthropicApiKey) req.session.anthropicApiKey = anthropicApiKey;
+  res.json({ ok: true });
+});
+
+// Lagre Anthropic-nøkkel i session
+app.post('/auth/set-anthropic-key', (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler apiKey' });
+  req.session.anthropicApiKey = apiKey;
+  res.json({ ok: true });
+});
+
+// Logg ut
+app.post('/auth/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ─── Hjelpefunksjon for å hente auth fra session ─────────────────────────────
+
+async function resolveAuth(req, res) {
+  if (req.session.authMode === 'oauth') {
+    try {
+      await ensureFreshToken(req.session);
+    } catch {
+      res.status(401).json({ error: 'Token utløpt eller mangler', reauthRequired: true });
+      return null;
+    }
+    return { type: 'bearer', value: `Bearer ${req.session.accessToken}` };
+  }
+  if (req.session.authMode === 'apikey') {
+    const cred = Buffer.from(`${req.session.apiKeyEmail}:${req.session.apiKeyToken}`).toString('base64');
+    return { type: 'basic', value: `Basic ${cred}` };
+  }
+  res.status(401).json({ error: 'Ikke autentisert', reauthRequired: true });
+  return null;
+}
+
+// ─── Eksisterende endepunkter ─────────────────────────────────────────────────
+
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Test endpoint to verify proxy can reach Atlassian
+// Test tilkobling
 app.get('/api/test-connection', async (req, res) => {
-  const targetUrl = req.headers['x-target-url'];
-  const authHeader = req.headers['authorization'];
+  const auth = await resolveAuth(req, res);
+  if (!auth) return;
 
-  console.log('\n[TEST] Connection test');
-  console.log(`[TEST] Target URL: ${targetUrl}`);
-  console.log(`[TEST] Auth present: ${authHeader ? 'Yes' : 'No'}`);
+  // I API-nøkkel-modus kan targetUrl fremdeles sendes via header
+  const targetUrl = req.headers['x-target-url'] ||
+    (req.session.authMode === 'oauth'
+      ? `https://api.atlassian.com/ex/jira/${req.session.cloudId}/rest/api/3/myself`
+      : null);
 
-  if (!targetUrl || !authHeader) {
-    return res.json({
-      success: false,
-      error: 'Missing X-Target-URL or Authorization header',
-      headers: {
-        'x-target-url': targetUrl ? 'present' : 'missing',
-        'authorization': authHeader ? 'present' : 'missing',
-      },
-    });
+  if (!targetUrl) {
+    return res.json({ success: false, error: 'Mangler X-Target-URL header' });
   }
+
+  console.log('\n[TEST] Tilkoblingstest');
+  console.log(`[TEST] Mål: ${targetUrl}`);
 
   try {
     const response = await fetch(targetUrl, {
-      headers: {
-        'Authorization': authHeader,
-        'Accept': 'application/json',
-      },
+      headers: { Authorization: auth.value, Accept: 'application/json' },
       redirect: 'manual',
     });
 
-    console.log(`[TEST] Response status: ${response.status}`);
+    console.log(`[TEST] Svar-status: ${response.status}`);
 
     if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
       return res.json({
         success: false,
-        error: 'Redirect detected - authentication may have failed',
+        error: 'Omdirigering oppdaget – autentisering kan ha feilet',
         status: response.status,
-        redirectTo: location,
       });
     }
-
     if (response.status >= 400) {
       const text = await response.text();
-      return res.json({
-        success: false,
-        error: 'API error',
-        status: response.status,
-        body: text.substring(0, 500),
-      });
+      return res.json({ success: false, error: 'API-feil', status: response.status, body: text.substring(0, 500) });
     }
-
-    return res.json({
-      success: true,
-      status: response.status,
-      message: 'Connection successful!',
-    });
+    return res.json({ success: true, status: response.status, message: 'Tilkobling vellykket!' });
   } catch (error) {
-    return res.json({
-      success: false,
-      error: error.message,
-    });
+    return res.json({ success: false, error: error.message });
   }
 });
 
-// Proxy endpoint - forwards all requests to Atlassian
+// Proxy-endepunkt – videresender alle forespørsler til Atlassian
 app.all('/api/atlassian/proxy', async (req, res) => {
   try {
-    // Get target URL from header
-    const targetUrl = req.headers['x-target-url'];
+    const auth = await resolveAuth(req, res);
+    if (!auth) return;
 
+    const targetUrl = req.headers['x-target-url'];
     if (!targetUrl) {
-      console.error('Missing X-Target-URL header');
-      return res.status(400).json({ error: 'Missing X-Target-URL header' });
+      return res.status(400).json({ error: 'Mangler X-Target-URL header' });
     }
 
-    console.log(`\n[PROXY] ${req.method} request`);
-    console.log(`[PROXY] Target: ${targetUrl}`);
+    console.log(`\n[PROXY] ${req.method} forespørsel`);
+    console.log(`[PROXY] Mål: ${targetUrl}`);
 
-    // Build the full URL with query params
     const url = new URL(targetUrl);
-
-    // Add query params from the original request
     Object.entries(req.query).forEach(([key, value]) => {
-      if (key !== '_') { // Ignore cache-busting params
-        url.searchParams.set(key, String(value));
-      }
+      if (key !== '_') url.searchParams.set(key, String(value));
     });
 
     const finalUrl = url.toString();
-    console.log(`[PROXY] Final URL: ${finalUrl}`);
+    console.log(`[PROXY] Endelig URL: ${finalUrl}`);
 
-    // Get authorization header
-    const authHeader = req.headers['authorization'];
-
-    if (!authHeader) {
-      console.error('[PROXY] Missing Authorization header');
-      return res.status(401).json({ error: 'Missing Authorization header' });
-    }
-
-    console.log(`[PROXY] Auth header present: ${authHeader.substring(0, 15)}...`);
-
-    // Make the request using fetch
     const fetchOptions = {
       method: req.method,
       headers: {
-        'Authorization': authHeader,
+        Authorization: auth.value,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
-      // Don't follow redirects - we want to see if Atlassian is redirecting us
       redirect: 'manual',
     };
 
-    // Only add body for non-GET/HEAD requests
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
       fetchOptions.body = JSON.stringify(req.body);
     }
 
     const response = await fetch(finalUrl, fetchOptions);
+    console.log(`[PROXY] Svar-status: ${response.status}`);
 
-    console.log(`[PROXY] Response status: ${response.status}`);
-
-    // Check for redirects (since we set redirect: 'manual')
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
-      console.error(`[PROXY] Redirect detected to: ${location}`);
-      console.error('[PROXY] This usually means authentication failed or URL is incorrect');
+      console.error(`[PROXY] Omdirigering oppdaget til: ${location}`);
       return res.status(401).json({
-        error: 'Authentication redirect detected',
-        message: 'Atlassian is redirecting the request. This usually means the API token is invalid or the URL is incorrect.',
+        error: 'Autentiserings-omdirigering oppdaget',
+        message: 'Atlassian omdirigerer forespørselen. API-token kan være ugyldig.',
         redirectTo: location,
       });
     }
 
-    // Get response data
     const contentType = response.headers.get('content-type');
     let data;
-
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
       data = await response.text();
     }
 
-    // If there's an error, log it
     if (response.status >= 400) {
-      console.error(`[PROXY] Error response:`, data);
+      console.error(`[PROXY] Feilsvar:`, data);
     }
 
-    // Forward the response
     res.status(response.status);
-
     if (typeof data === 'object') {
       res.json(data);
     } else {
       res.send(data);
     }
   } catch (error) {
-    console.error('[PROXY] Error:', error.message);
-    res.status(500).json({
-      error: 'Proxy error',
-      message: error.message,
-    });
+    console.error('[PROXY] Feil:', error.message);
+    res.status(500).json({ error: 'Proxy-feil', message: error.message });
   }
 });
 
-// AI digest endpoint
-app.post('/api/ai/digest', express.json(), async (req, res) => {
-  const { messages, apiKey } = req.body;
-  if (!apiKey) {
-    return res.status(400).json({ error: 'Missing Anthropic API key' });
-  }
+// ─── AI-endepunkter ───────────────────────────────────────────────────────────
+
+app.post('/api/ai/digest', async (req, res) => {
+  const { messages, apiKey: bodyKey } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        messages,
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages }),
     });
     const data = await response.json();
     res.status(response.status).json(data);
@@ -211,11 +360,11 @@ app.post('/api/ai/digest', express.json(), async (req, res) => {
   }
 });
 
-// AI timeline report endpoint
-app.post('/api/ai/timeline-report', express.json(), async (req, res) => {
-  const { apiKey, issues, reportDate } = req.body;
-  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
-  if (!issues || !issues.length) return res.status(400).json({ error: 'Missing issues' });
+app.post('/api/ai/timeline-report', async (req, res) => {
+  const { apiKey: bodyKey, issues, reportDate } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
+  if (!issues || !issues.length) return res.status(400).json({ error: 'Mangler saker' });
 
   const issueList = issues.map((i) =>
     `- ${i.key}: ${i.summary} | Type: ${i.issueType?.name ?? '–'} | Status: ${i.status?.name ?? '–'} | ` +
@@ -250,17 +399,8 @@ Rapporten skal egne seg som vedlegg til et styremøte eller prosjektstatusrappor
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1400,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1400, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
     });
     const data = await response.json();
     res.status(response.status).json(data);
@@ -269,15 +409,11 @@ Rapporten skal egne seg som vedlegg til et styremøte eller prosjektstatusrappor
   }
 });
 
-// AI meeting note rewrite endpoint
-app.post('/api/ai/rewrite-meeting', express.json(), async (req, res) => {
-  const { notes, attendees, context, apiKey } = req.body;
-  if (!apiKey) {
-    return res.status(400).json({ error: 'Missing Anthropic API key' });
-  }
-  if (!notes) {
-    return res.status(400).json({ error: 'Missing notes content' });
-  }
+app.post('/api/ai/rewrite-meeting', async (req, res) => {
+  const { notes, attendees, context, apiKey: bodyKey } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
+  if (!notes) return res.status(400).json({ error: 'Mangler notat-innhold' });
 
   const systemPrompt = `Du er en profesjonell møtereferent. Renskriver uferdige møtenotater til velstrukturerte, profesjonelle referater på norsk.
 
@@ -307,24 +443,13 @@ Regler:
     attendees ? `Deltakere: ${attendees}` : null,
     context ? `Kontekst/instruksjoner: ${context}` : null,
     `Møtenotat:\n${notes}`,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  ].filter(Boolean).join('\n\n');
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
     });
     const data = await response.json();
     res.status(response.status).json(data);
@@ -333,19 +458,15 @@ Regler:
   }
 });
 
-// AI project documents endpoint
-app.post('/api/ai/project-documents', express.json(), async (req, res) => {
-  const { apiKey, documents, projectInfo, additionalInfo } = req.body;
-  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
-  if (!documents || !documents.length) return res.status(400).json({ error: 'Missing documents list' });
+app.post('/api/ai/project-documents', async (req, res) => {
+  const { apiKey: bodyKey, documents, projectInfo, additionalInfo } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
+  if (!documents || !documents.length) return res.status(400).json({ error: 'Mangler dokumentliste' });
 
   const docNames = {
-    mandate:      'Prosjektmandat',
-    needs:        'Behovsanalyse',
-    decision:     'Beslutningsgrunnlag',
-    risk:         'Risikoanalyse',
-    stakeholders: 'Interessentanalyse',
-    status:       'Statusrapport-mal',
+    mandate: 'Prosjektmandat', needs: 'Behovsanalyse', decision: 'Beslutningsgrunnlag',
+    risk: 'Risikoanalyse', stakeholders: 'Interessentanalyse', status: 'Statusrapport-mal',
   };
 
   const systemPrompt = `Du er en erfaren prosjektleder og dokumentasjonsspesialist.
@@ -385,47 +506,27 @@ Returner KUN et gyldig JSON-array uten annen tekst.`;
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
     });
-
     const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
-    }
+    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
 
     const text = data.content?.[0]?.text ?? '';
-
-    // Strip potential markdown code fences
     const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
     let results;
-    try {
-      results = JSON.parse(cleaned);
-    } catch {
-      return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) });
-    }
-
+    try { results = JSON.parse(cleaned); }
+    catch { return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) }); }
     res.json({ results });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// AI suggest subtasks endpoint
-app.post('/api/ai/suggest-subtasks', express.json(), async (req, res) => {
-  const { apiKey, projectType, projectInfo, additionalInfo } = req.body;
-  if (!apiKey) return res.status(400).json({ error: 'Missing Anthropic API key' });
+app.post('/api/ai/suggest-subtasks', async (req, res) => {
+  const { apiKey: bodyKey, projectType, projectInfo, additionalInfo } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
 
   const isType2 = projectType === 'type2';
   const taskType = isType2 ? 'Oppgave-titler (tasks under en Oppgavesamling)' : 'Underoppgave-titler';
@@ -435,47 +536,25 @@ Returner KUN et gyldig JSON-objekt på formen: { "subtasks": [{ "title": "..." }
 Foreslå 3–7 elementer. Skriv på norsk bokmål. Ingen annen tekst – kun JSON.`;
 
   const context = isType2
-    ? [
-        `Prosjektnavn: ${projectInfo?.name || '(ikke oppgitt)'}`,
-        `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`,
-        `Formål: ${additionalInfo?.purpose || '(ikke oppgitt)'}`,
-        `Mål: ${additionalInfo?.goals || '(ikke oppgitt)'}`,
-        `Interessenter: ${additionalInfo?.stakeholders || '(ikke oppgitt)'}`,
-      ].join('\n')
-    : [
-        `Oppgavenavn: ${projectInfo?.name || '(ikke oppgitt)'}`,
-        `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`,
-      ].join('\n');
+    ? [`Prosjektnavn: ${projectInfo?.name || '(ikke oppgitt)'}`, `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`, `Formål: ${additionalInfo?.purpose || '(ikke oppgitt)'}`, `Mål: ${additionalInfo?.goals || '(ikke oppgitt)'}`, `Interessenter: ${additionalInfo?.stakeholders || '(ikke oppgitt)'}`].join('\n')
+    : [`Oppgavenavn: ${projectInfo?.name || '(ikke oppgitt)'}`, `Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}`].join('\n');
 
   const userMessage = `Foreslå ${taskType} for følgende ${isType2 ? 'prosjekt' : 'oppgave'}:\n\n${context}\n\nReturner KUN JSON.`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 800, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
     });
     const data = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
-    }
+    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
+
     const text = data.content?.[0]?.text ?? '';
     const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     let result;
-    try {
-      result = JSON.parse(cleaned);
-    } catch {
-      return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) });
-    }
+    try { result = JSON.parse(cleaned); }
+    catch { return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: text.substring(0, 500) }); }
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -488,11 +567,20 @@ app.listen(PORT, () => {
   Atlassian API Proxy Server
   Running on http://localhost:${PORT}
 
-  Endpoints:
-  - GET  /health               Health check
-  - GET  /api/test-connection  Test Atlassian connection
-  - ALL  /api/atlassian/proxy         Proxy requests
-  - POST /api/ai/project-documents   AI document generation
+  Auth-endepunkter:
+  - GET  /auth/atlassian         Start OAuth-flyt
+  - GET  /auth/callback          OAuth callback
+  - GET  /auth/me                Sjekk autentiseringsstatus
+  - POST /auth/select-cloud      Velg Atlassian-instans
+  - POST /auth/apikey            API-nøkkel-modus (lokal utvikling)
+  - POST /auth/set-anthropic-key Lagre Anthropic-nøkkel
+  - POST /auth/logout            Logg ut
+
+  API-endepunkter:
+  - GET  /health                 Health check
+  - GET  /api/test-connection    Test tilkobling
+  - ALL  /api/atlassian/proxy    Proxy til Atlassian
+  - POST /api/ai/*               AI-funksjoner
 ========================================
   `);
 });

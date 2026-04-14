@@ -157,3 +157,37 @@
 .teamCompOption:hover {
   background: var(--color-bg-hover);
 }
+
+.fieldLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.select {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.inputRaw {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.inputRaw:focus {
+  border-color: var(--color-primary);
+}

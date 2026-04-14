@@ -36,6 +36,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [visFerdig, setVisFerdig] = useState(false);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -46,7 +47,9 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
     }
   };
 
-  const sorted = [...issues].sort((a, b) => {
+  const ferdigAntall = issues.filter((i) => i.status.category === 'done').length;
+
+  const sorted = [...issues].filter((i) => visFerdig || i.status.category !== 'done').sort((a, b) => {
     let cmp = 0;
     switch (sortKey) {
       case 'key': cmp = a.key.localeCompare(b.key); break;
@@ -80,6 +83,16 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
 
   return (
     <div className={listStyles.wrapper}>
+      {ferdigAntall > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            className={teamStyles.toggleFerdigBtn}
+            onClick={() => setVisFerdig((v) => !v)}
+          >
+            {visFerdig ? `Skjul ferdige (${ferdigAntall})` : `Vis ferdige (${ferdigAntall})`}
+          </button>
+        </div>
+      )}
       <div className={`${listStyles.table} ${teamStyles.teamIssueTable}`}>
         {/* Header */}
         <div className={listStyles.headerRow}>
@@ -90,8 +103,9 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
           <button className={listStyles.colHeader} onClick={() => handleSort('priority')}>Prioritet <SortIcon col="priority" /></button>
           <button className={listStyles.colHeader} onClick={() => handleSort('assignee')}>Tildelt <SortIcon col="assignee" /></button>
           <button className={listStyles.colHeader} onClick={() => handleSort('dueDate')}>Frist <SortIcon col="dueDate" /></button>
-          <div className={listStyles.colHeader}>Etiketter</div>
+          <div className={listStyles.colHeader}>Komponent</div>
           <div className={listStyles.colHeader}>Kategori</div>
+          <div className={listStyles.colHeader}>Etiketter</div>
           <button className={listStyles.colHeader} onClick={() => handleSort('updated')}>Oppdatert <SortIcon col="updated" /></button>
           <div className={listStyles.colType} />
         </div>
@@ -106,7 +120,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
             <div key={issue.key} style={{ display: 'contents' }}>
               {/* Parent row */}
               <div className={listStyles.row} onClick={() => onIssueClick(issue)} style={{ display: 'contents', cursor: 'pointer' }}>
-                <div className={listStyles.colType}>
+                <div className={listStyles.colType} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   {hasChildren ? (
                     <button
                       className={listStyles.expandBtn}
@@ -118,9 +132,12 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                         className={`${listStyles.expandIcon} ${isExpanded ? listStyles.expandIconOpen : ''}`}
                       />
                     </button>
-                  ) : issue.issueType.iconUrl ? (
+                  ) : (
+                    <span style={{ display: 'inline-block', width: 18 }} />
+                  )}
+                  {issue.issueType.iconUrl && (
                     <img src={issue.issueType.iconUrl} alt={issue.issueType.name} className={listStyles.typeIcon} title={issue.issueType.name} />
-                  ) : null}
+                  )}
                 </div>
                 <div className={listStyles.colData}>
                   <a
@@ -180,6 +197,23 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                   )}
                 </div>
                 <div className={listStyles.colData}>
+                  {issue.components && issue.components.length > 0 && (
+                    <div className={listStyles.labels}>
+                      {issue.components.slice(0, 2).map((c) => (
+                        <span key={c.id} className={listStyles.label}>{c.name}</span>
+                      ))}
+                      {issue.components.length > 2 && (
+                        <span className={listStyles.labelMore}>+{issue.components.length - 2}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className={listStyles.colData}>
+                  {issue.kategori && (
+                    <span className={listStyles.label}>{issue.kategori}</span>
+                  )}
+                </div>
+                <div className={listStyles.colData}>
                   {issue.labels && issue.labels.length > 0 && (
                     <div className={listStyles.labels}>
                       {issue.labels.slice(0, 2).map((label) => (
@@ -192,11 +226,6 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                   )}
                 </div>
                 <div className={listStyles.colData}>
-                  {issue.kategori && (
-                    <span className={listStyles.label}>{issue.kategori}</span>
-                  )}
-                </div>
-                <div className={listStyles.colData}>
                   <span className={listStyles.updated}>
                     {new Date(issue.updated).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
                   </span>
@@ -204,73 +233,116 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                 <div className={listStyles.colData} />
               </div>
 
-              {/* Children — grid-column: 1/-1, kolonner justert mot foreldrerad */}
-              {hasChildren && isExpanded && (
-                <div className={listStyles.childGroupCell}>
-                  {children.map((child) => (
-                    <div
-                      key={child.key}
-                      className={teamStyles.teamChildItemRow}
-                      onClick={() => onIssueClick(child)}
-                    >
-                      {/* Kol 1: type-ikon */}
-                      <div className={listStyles.colType}>
-                        {child.issueType.iconUrl && (
-                          <img src={child.issueType.iconUrl} alt={child.issueType.name} className={listStyles.typeIcon} title={child.issueType.name} />
-                        )}
-                      </div>
-                      {/* Kol 2: nøkkel */}
-                      <div className={listStyles.colData}>
-                        <a
-                          href={`${jiraBaseUrl}/browse/${child.key}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={listStyles.issueKey}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {child.key}
-                        </a>
-                      </div>
-                      {/* Kol 3: tittel */}
-                      <div className={`${listStyles.colData} ${listStyles.colSummary}`}>
-                        <span className={listStyles.summary}>{child.summary}</span>
-                      </div>
-                      {/* Kol 4: status */}
-                      <div className={listStyles.colData}>
-                        <Badge
-                          variant={child.status.category === 'done' ? 'success' : child.status.category === 'indeterminate' ? 'primary' : 'default'}
-                          size="sm"
-                        >
-                          {child.status.name}
-                        </Badge>
-                      </div>
-                      {/* Kol 5: prioritet */}
-                      <div className={listStyles.colData}>
-                        {child.priority && (
-                          <Badge variant={getPriorityVariant(child.priority.name)} size="sm">
-                            {child.priority.name}
-                          </Badge>
-                        )}
-                      </div>
-                      {/* Kol 6: tildelt */}
-                      <div className={listStyles.colData}>
-                        {child.assignee && (
-                          <div className={listStyles.assignee}>
-                            {child.assignee.avatarUrl ? (
-                              <img src={child.assignee.avatarUrl} alt={child.assignee.displayName} className={listStyles.avatar} />
-                            ) : (
-                              <div className={listStyles.avatarInitial}>{child.assignee.displayName.charAt(0)}</div>
-                            )}
-                            <span className={listStyles.assigneeName}>{child.assignee.displayName}</span>
-                          </div>
-                        )}
-                      </div>
-                      {/* Kol 7–11: frist, etiketter, kategori, oppdatert, handling — tomme */}
-                      <div /><div /><div /><div /><div />
+              {/* Children — display:contents gir eksakt kolonnejustering mot foreldreradene */}
+              {hasChildren && isExpanded && children.map((child) => {
+                const cc = (extra?: string) =>
+                  `${teamStyles.childCell}${extra ? ` ${extra}` : ''}`;
+                const click = () => onIssueClick(child);
+                return (
+                  <div key={child.key} style={{ display: 'contents' }}>
+                    {/* Kol 1: tom */}
+                    <div className={cc()} onClick={click} />
+                    {/* Kol 2: innrykk + ikon + nøkkel */}
+                    <div className={cc(listStyles.colData)} onClick={click}
+                      style={{ paddingLeft: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {child.issueType.iconUrl && (
+                        <img src={child.issueType.iconUrl} alt={child.issueType.name} className={listStyles.typeIcon} title={child.issueType.name} />
+                      )}
+                      <a
+                        href={`${jiraBaseUrl}/browse/${child.key}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={listStyles.issueKey}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {child.key}
+                      </a>
                     </div>
-                  ))}
-                </div>
-              )}
+                    {/* Kol 3: tittel */}
+                    <div className={cc(`${listStyles.colData} ${listStyles.colSummary}`)} onClick={click}>
+                      <span className={listStyles.summary}>{child.summary}</span>
+                    </div>
+                    {/* Kol 4: status */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      <Badge
+                        variant={child.status.category === 'done' ? 'success' : child.status.category === 'indeterminate' ? 'primary' : 'default'}
+                        size="sm"
+                      >
+                        {child.status.name}
+                      </Badge>
+                    </div>
+                    {/* Kol 5: prioritet */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.priority && (
+                        <Badge variant={getPriorityVariant(child.priority.name)} size="sm">
+                          {child.priority.name}
+                        </Badge>
+                      )}
+                    </div>
+                    {/* Kol 6: tildelt */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.assignee && (
+                        <div className={listStyles.assignee}>
+                          {child.assignee.avatarUrl ? (
+                            <img src={child.assignee.avatarUrl} alt={child.assignee.displayName} className={listStyles.avatar} />
+                          ) : (
+                            <div className={listStyles.avatarInitial}>{child.assignee.displayName.charAt(0)}</div>
+                          )}
+                          <span className={listStyles.assigneeName}>{child.assignee.displayName}</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Kol 7: frist */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.dueDate && (
+                        <span className={new Date(child.dueDate) < new Date() && child.status.category !== 'done' ? listStyles.overdue : listStyles.dueDate}>
+                          {new Date(child.dueDate).toLocaleDateString('nb-NO')}
+                        </span>
+                      )}
+                    </div>
+                    {/* Kol 8: komponent */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.components && child.components.length > 0 && (
+                        <div className={listStyles.labels}>
+                          {child.components.slice(0, 2).map((c) => (
+                            <span key={c.id} className={listStyles.label}>{c.name}</span>
+                          ))}
+                          {child.components.length > 2 && (
+                            <span className={listStyles.labelMore}>+{child.components.length - 2}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Kol 9: kategori */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.kategori && (
+                        <span className={listStyles.label}>{child.kategori}</span>
+                      )}
+                    </div>
+                    {/* Kol 10: etiketter */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      {child.labels && child.labels.length > 0 && (
+                        <div className={listStyles.labels}>
+                          {child.labels.slice(0, 2).map((label) => (
+                            <span key={label} className={listStyles.label}>{label}</span>
+                          ))}
+                          {child.labels.length > 2 && (
+                            <span className={listStyles.labelMore}>+{child.labels.length - 2}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Kol 11: oppdatert */}
+                    <div className={cc(listStyles.colData)} onClick={click}>
+                      <span className={listStyles.updated}>
+                        {new Date(child.updated).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    {/* Kol 12: tom */}
+                    <div className={cc()} onClick={click} />
+                  </div>
+                );
+              })}
             </div>
           );
         })}

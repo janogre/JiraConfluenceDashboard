@@ -7,6 +7,7 @@ import { Badge, LoadingOverlay } from '../../components/common';
 import {
   getProjects,
   getMyIssues,
+  getChildIssuesForParents,
   getIssues,
   getTransitions,
   transitionIssue,
@@ -231,12 +232,25 @@ export function Board() {
 
   const displayedIssues = issues ?? [];
 
+  // Foreldrenøkler i "Mine saker" — brukes til å hente alle barn uavhengig av tildeling
+  const parentKeysInMineMode = mode === 'mine'
+    ? displayedIssues.map((i) => i.key)
+    : [];
+
+  const { data: extraChildren = [] } = useQuery({
+    queryKey: ['childIssuesForParents', parentKeysInMineMode],
+    queryFn: () => getChildIssuesForParents(parentKeysInMineMode),
+    enabled: configured && mode === 'mine' && parentKeysInMineMode.length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Bygg kart over barn basert på parent-felt (dekker vanlige child-saker, ikke bare suboppgavetypen)
   const derivedChildrenMap = new Map<string, JiraIssue[]>();
-  displayedIssues.forEach((issue) => {
+  [...displayedIssues, ...extraChildren].forEach((issue) => {
     if (issue.parent?.key) {
       const existing = derivedChildrenMap.get(issue.parent.key) ?? [];
-      existing.push(issue);
+      // Unngå duplikater
+      if (!existing.some((e) => e.key === issue.key)) existing.push(issue);
       derivedChildrenMap.set(issue.parent.key, existing);
     }
   });
@@ -448,6 +462,23 @@ export function Board() {
           </div>
 
           <p className={styles.cardSummary}>{issue.summary}</p>
+
+          {(issue.components?.length > 0 || issue.kategori) && (
+            <div className={styles.cardMeta}>
+              {issue.components?.slice(0, 2).map((c) => (
+                <span key={c.id} className={styles.cardMetaComponent}>
+                  <Layers size={10} />
+                  {c.name}
+                </span>
+              ))}
+              {issue.kategori && (
+                <span className={styles.cardMetaKategori}>
+                  <Tag size={10} />
+                  {issue.kategori}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className={styles.cardFooter}>
             {issue.priority && (

@@ -4,6 +4,7 @@
  * og slett LayoutV2.tsx + LayoutV2.module.css.
  */
 import { useState } from 'react';
+import { UserMenu } from './UserMenu';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -106,6 +107,7 @@ export function LayoutV2() {
             {open ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
           <h1 className={styles.title}>{getPageTitle()}</h1>
+          <UserMenu />
         </header>
         <main className={styles.main}>
           <Outlet />

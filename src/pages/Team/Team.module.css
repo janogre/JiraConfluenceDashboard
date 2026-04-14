@@ -406,27 +406,38 @@
 
 /* 11-kolonne grid for TeamIssueList (legger til Kategori-kolonne) */
 .teamIssueTable {
-  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 1fr 100px 88px 36px !important;
+  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 120px 100px 1fr 88px 36px !important;
 }
 
-/* Barne-rader med kolonner justert mot foreldreradene */
-.teamChildItemRow {
-  display: grid;
-  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 1fr 100px 88px 36px;
+/* Enkeltceller i barne-rader — display:contents på rad-wrapper gir eksakt kolonnejustering */
+.childCell {
+  display: flex;
   align-items: center;
-  padding: 5px 0;
+  padding: 5px var(--spacing-sm);
+  min-height: 36px;
+  background: color-mix(in srgb, var(--color-bg-secondary) 60%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
-  border-left: 3px solid var(--color-primary);
   cursor: pointer;
   transition: background 0.1s;
-  min-height: 36px;
 }
 
-.teamChildItemRow:last-child {
-  border-bottom: none;
-}
-
-.teamChildItemRow:hover {
+.childCell:hover {
   background: var(--color-bg-hover);
+}
+
+.toggleFerdigBtn {
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggleFerdigBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
 }
 

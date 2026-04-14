@@ -231,6 +231,20 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
         <div className={styles.issueSectionHeader}>
           <span className={styles.issueSectionTitle}>Alle saker ({filteredIssues.length})</span>
           <div className={styles.filterBar}>
+            {/* Tildelt */}
+            {availableAssignees.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+              >
+                <option value="">Alle tildelte</option>
+                {availableAssignees.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            )}
+            {/* Prioritet */}
             {availablePriorities.length > 0 && (
               <select
                 className={styles.filterSelect}
@@ -243,6 +257,7 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
                 ))}
               </select>
             )}
+            {/* Status */}
             {availableStatuses.length > 0 && (
               <select
                 className={styles.filterSelect}
@@ -262,42 +277,18 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
                 </optgroup>
               </select>
             )}
-            {componentNames.length > 1 && (
-              <select
-                className={styles.filterSelect}
-                value={filterComponent}
-                onChange={(e) => setFilterComponent(e.target.value)}
-              >
-                <option value="">Alle komponenter</option>
-                {componentNames.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            )}
-            {availableAssignees.length > 0 && (
-              <select
-                className={styles.filterSelect}
-                value={filterAssignee}
-                onChange={(e) => setFilterAssignee(e.target.value)}
-              >
-                <option value="">Alle tildelte</option>
-                {availableAssignees.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            )}
-            {availableLabels.length > 0 && (
-              <select
-                className={styles.filterSelect}
-                value={filterLabel}
-                onChange={(e) => setFilterLabel(e.target.value)}
-              >
-                <option value="">Alle etiketter</option>
-                {availableLabels.map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            )}
+            {/* Komponent — alltid synlig */}
+            <select
+              className={styles.filterSelect}
+              value={filterComponent}
+              onChange={(e) => setFilterComponent(e.target.value)}
+            >
+              <option value="">Alle komponenter</option>
+              {componentNames.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            {/* Kategori */}
             {availableKategorier.length > 0 && (
               <select
                 className={styles.filterSelect}
@@ -307,6 +298,19 @@ export function TeamCoordinator({ teamName, componentNames }: TeamCoordinatorPro
                 <option value="">Alle kategorier</option>
                 {availableKategorier.map((k) => (
                   <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            )}
+            {/* Etiketter */}
+            {availableLabels.length > 0 && (
+              <select
+                className={styles.filterSelect}
+                value={filterLabel}
+                onChange={(e) => setFilterLabel(e.target.value)}
+              >
+                <option value="">Alle etiketter</option>
+                {availableLabels.map((l) => (
+                  <option key={l} value={l}>{l}</option>
                 ))}
               </select>
             )}
