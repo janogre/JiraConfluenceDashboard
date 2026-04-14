@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Save, Check, AlertCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardContent, Button, Input } from '../../components/common';
-import { getApiConfig, saveApiConfig, isConfigured } from '../../services/api';
+import { getApiConfig, saveApiConfig } from '../../services/api';
 import { getAllProjectComponents } from '../../services/jiraService';
 import { loadTeamConfig, saveTeamConfig, TEAM_NAMES } from '../../store/teamStore';
 import type { TeamConfig, TeamName } from '../../store/teamStore';
@@ -52,7 +52,7 @@ export function Settings() {
     setError(null);
   };
 
-  const configured = isConfigured();
+  const configured = !!(config.jiraBaseUrl && config.email && config.apiToken);
 
   const [teamConfig, setTeamConfig] = useState<TeamConfig>(loadTeamConfig);
   const [teamSaved, setTeamSaved] = useState(false);
@@ -66,7 +66,10 @@ export function Settings() {
     staleTime: 1000 * 60 * 30,
   });
 
-  const assignedComponents = new Set(TEAM_NAMES.flatMap((t) => teamConfig[t]));
+  const assignedComponents = useMemo(
+    () => new Set(TEAM_NAMES.flatMap((t) => teamConfig[t])),
+    [teamConfig]
+  );
 
   const handleAddComponent = (team: TeamName, compName: string) => {
     setTeamConfig((prev) => ({
@@ -229,7 +232,6 @@ export function Settings() {
                       onChange={(e) => {
                         setComponentSearch((prev) => ({ ...prev, [team]: e.target.value }));
                         setOpenDropdown(team);
-                        setTeamSaved(false);
                       }}
                       onFocus={() => setOpenDropdown(team)}
                       onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
