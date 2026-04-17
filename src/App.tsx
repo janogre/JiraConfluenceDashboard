@@ -13,6 +13,7 @@ import { TeamCalendar } from './pages/Calendar/Calendar';
 import { MyMetrics } from './pages/MyMetrics/MyMetrics';
 import { ProjectWizard } from './pages/ProjectWizard/ProjectWizard';
 import { Team } from './pages/Team/Team';
+import { Lager } from './pages/Lager/Lager';
 import { Login } from './pages/Login/Login';
 import { AuthCallback } from './pages/AuthCallback/AuthCallback';
 import { useAuthStore } from './store/authStore';
@@ -63,6 +64,7 @@ function App() {
               <Route path="my-metrics" element={<MyMetrics />} />
               <Route path="project-wizard" element={<ProjectWizard />} />
               <Route path="team" element={<Team />} />
+              <Route path="lager" element={<Lager />} />
             </Route>
           ) : (
             <Route path="*" element={<Login />} />

@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   Wand2,
   Users,
+  Package,
 } from 'lucide-react';
 import { NetworkLogo } from './NetworkLogo';
 import styles from './LayoutV2.module.css';
@@ -34,6 +35,7 @@ const navItems = [
   { path: '/confluence',     icon: FileText,         label: 'Confluence'      },
   { path: '/board',      icon: Kanban,           label: 'Jira Board'     },
   { path: '/team',       icon: Users,            label: 'Team'           },
+  { path: '/lager',      icon: Package,          label: 'Lager'          },
   { path: '/todos',      icon: CheckSquare,      label: 'Mine oppgaver'  },
   { path: '/risk',       icon: AlertTriangle,    label: 'Risikopanel'    },
   { path: '/digest',     icon: Sparkles,         label: 'Ukessammendrag' },
