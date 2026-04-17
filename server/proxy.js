@@ -4,8 +4,10 @@ import cors from 'cors';
 import session from 'express-session';
 import FileStoreFactory from 'session-file-store';
 import crypto from 'crypto';
+import bcRouter from './businessCentral/index.js';
 
 const FileStore = FileStoreFactory(session);
+
 const app = express();
 const PORT = 3001;
 
@@ -17,6 +19,8 @@ app.use(cors({
 
 // Parse JSON bodies
 app.use(express.json());
+
+app.use('/api/bc', bcRouter);
 
 // Session-håndtering
 app.use(session({
