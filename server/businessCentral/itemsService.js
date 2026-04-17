@@ -14,7 +14,7 @@ async function fetchAllPages(token) {
   const base = `https://api.businesscentral.dynamics.com/v2.0/${process.env.BC_TENANT_ID}/${process.env.BC_ENVIRONMENT}/api/v2.0`;
   let url =
     `${base}/companies(${process.env.BC_COMPANY_ID})/items` +
-    `?$filter=${encodeURIComponent(filter)}&$select=${encodeURIComponent(select)}&$top=1000`;
+    `?$filter=${encodeURIComponent(filter)}&$select=${select}&$top=1000`;
 
   const items = [];
   let pageCount = 0;
