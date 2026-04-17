@@ -1,6 +1,17 @@
 let cache = { token: null, expiresAt: 0 };
 
+function assertEnvVars() {
+  const missing = ['BC_TENANT_ID', 'BC_CLIENT_ID', 'BC_CLIENT_SECRET'].filter(
+    (k) => !process.env[k]
+  );
+  if (missing.length) {
+    throw new Error(`[BC auth] Mangler miljøvariabler: ${missing.join(', ')}`);
+  }
+}
+
 export async function getBcToken() {
+  assertEnvVars();
+
   if (cache.token && Date.now() < cache.expiresAt) {
     console.log('[BC auth] Cache-treff – gjenbruker token');
     return cache.token;
@@ -27,7 +38,7 @@ export async function getBcToken() {
     const text = await resp.text();
     console.error('[BC auth] Token-henting feilet:', resp.status, text);
     const err = new Error(`BC token-henting feilet (${resp.status})`);
-    err.status = 401;
+    err.status = resp.status;
     throw err;
   }
 
