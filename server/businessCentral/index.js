@@ -16,7 +16,10 @@ router.get('/items', async (req, res) => {
     if (err.status === 401) {
       return res.status(401).json({ error: 'BC-autentisering feilet. Kontakt administrator – sjekk BC_CLIENT_SECRET i .env.' });
     }
-    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
+    if (
+      err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ||
+      err.name === 'TimeoutError' || err.name === 'AbortError'
+    ) {
       return res.status(503).json({ error: 'Kunne ikke nå Business Central. Sjekk nettverkstilkobling og prøv igjen.' });
     }
     res.status(500).json({
