@@ -257,3 +257,18 @@ export interface ApiConfig {
   apiToken: string;
   anthropicApiKey?: string;
 }
+
+// Business Central – Lager
+export interface BcItem {
+  number: string;
+  displayName: string;
+  displayName2: string;
+  inventory: number;
+  inventoryPostingGroupCode: string;
+  lastModifiedDateTime: string;
+}
+
+export interface BcItemsResponse {
+  items: BcItem[];
+  fetchedAt: string;
+}
