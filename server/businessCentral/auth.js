@@ -39,6 +39,7 @@ export async function getBcToken() {
     console.error('[BC auth] Token-henting feilet:', resp.status, text);
     const err = new Error(`BC token-henting feilet (${resp.status})`);
     err.status = resp.status;
+    err.isAuthError = true;
     throw err;
   }
 

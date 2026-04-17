@@ -262,7 +262,7 @@ export interface ApiConfig {
 export interface BcItem {
   number: string;
   displayName: string;
-  displayName2: string;
+  displayName2: string | null;
   inventory: number;
   inventoryPostingGroupCode: string;
   lastModifiedDateTime: string;

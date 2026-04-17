@@ -187,7 +187,7 @@ export function Lager() {
                 >
                   <td className={styles.varenr}>{item.number}</td>
                   <td>{item.displayName}</td>
-                  <td className={styles.desc2}>{item.displayName2}</td>
+                  <td className={styles.desc2}>{item.displayName2 ?? ''}</td>
                   <td><span className={styles.groupBadge}>{item.inventoryPostingGroupCode}</span></td>
                   <td className={`${styles.inventory} ${inventoryClass(item.inventory)}`}>
                     {item.inventory}

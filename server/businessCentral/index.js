@@ -13,7 +13,7 @@ router.get('/items', async (req, res) => {
   } catch (err) {
     console.error('[BC router] Feil:', err.message);
 
-    if (err.status === 401) {
+    if (err.status === 401 || err.isAuthError) {
       return res.status(401).json({ error: 'BC-autentisering feilet. Kontakt administrator – sjekk BC_CLIENT_SECRET i .env.' });
     }
     if (
