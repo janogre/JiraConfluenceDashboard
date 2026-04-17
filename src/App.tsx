@@ -56,7 +56,6 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="confluence" element={<Confluence />} />
               <Route path="board" element={<Board />} />
-              <Route path="todos" element={<Todos />} />
               <Route path="settings" element={<Settings />} />
               <Route path="risk" element={<Risk />} />
               <Route path="digest" element={<Digest />} />
@@ -65,6 +64,7 @@ function App() {
               <Route path="project-wizard" element={<ProjectWizard />} />
               <Route path="team" element={<Team />} />
               <Route path="lager" element={<Lager />} />
+              <Route path="todos" element={<Todos />} />
             </Route>
           ) : (
             <Route path="*" element={<Login />} />
