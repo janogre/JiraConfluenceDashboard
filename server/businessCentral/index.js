@@ -18,7 +18,7 @@ function handleBcError(err, res, context) {
   ) {
     return res.status(503).json({ error: 'Kunne ikke nå Business Central. Sjekk nettverkstilkobling og prøv igjen.' });
   }
-  res.status(500).json({
+  return res.status(500).json({
     error: `Business Central returnerte en feil (HTTP ${err.status ?? 500}).`,
     detail: err.message,
   });
