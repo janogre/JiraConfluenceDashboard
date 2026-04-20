@@ -52,6 +52,11 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
     return [...new Set(data.orders.map((o) => o.vendorName))].sort();
   }, [data]);
 
+  const allStatuses = useMemo(() => {
+    if (!data) return [];
+    return [...new Set(data.orders.map((o) => o.status))].sort();
+  }, [data]);
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = search.toLowerCase();
@@ -135,8 +140,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
 
         <select className={styles.select} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Alle statuser</option>
-          <option value="Open">Open</option>
-          <option value="Draft">Draft</option>
+          {allStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
 
         <select className={styles.select} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
@@ -244,8 +248,8 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                               </tr>
                             </thead>
                             <tbody>
-                              {order.purchaseOrderLines.map((line: BcPurchaseOrderLine, idx) => (
-                                <tr key={idx} className={styles.lineRow}>
+                              {order.purchaseOrderLines.map((line: BcPurchaseOrderLine) => (
+                                <tr key={line.lineObjectNumber} className={styles.lineRow}>
                                   <td>
                                     <button
                                       className={styles.lineVarenr}
@@ -262,7 +266,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                                   <td style={{ textAlign: 'right' }} className={styles.dateCell}>{line.quantity}</td>
                                   <td
                                     style={{ textAlign: 'right' }}
-                                    className={`${styles.dateCell} ${line.receivedQuantity >= line.quantity ? styles.receivedFull : ''}`}
+                                    className={`${styles.dateCell} ${line.quantity > 0 && line.receivedQuantity >= line.quantity ? styles.receivedFull : ''}`}
                                   >
                                     {line.receivedQuantity}
                                   </td>
