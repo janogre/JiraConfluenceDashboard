@@ -1,5 +1,4 @@
 .container {
-  padding: 24px;
   max-width: 1400px;
 }
 
@@ -243,4 +242,174 @@
   color: var(--color-text-secondary);
   font-size: 14px;
   gap: 10px;
+}
+
+/* ── Faner ── */
+.tabs {
+  display: flex;
+  border-bottom: 2px solid var(--color-border);
+  padding: 0 24px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tabActive {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ── Tab-innhold ── */
+.tabContent {
+  padding: 24px;
+}
+
+/* ── Cross-tab lenke i Lager-rader ── */
+.crossTabLink {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.crossTabLink:hover {
+  opacity: 1;
+  background: var(--color-bg-secondary);
+}
+
+/* ── Ordre-tabell ── */
+.orderRow {
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.orderRow:hover {
+  background: var(--color-bg-secondary);
+}
+
+.orderRowDraft {
+  opacity: 0.6;
+}
+
+.expandBtn {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* ── Status-badges ── */
+.statusBadgeOpen {
+  background: #22c55e22;
+  color: #22c55e;
+  border: 1px solid #22c55e44;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusBadgeDraft {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Linjetabell (innrykk under ordre) ── */
+.linesRow {
+  background: var(--color-bg-secondary);
+}
+
+.lineTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  padding-left: 40px;
+}
+
+.lineTable thead tr {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lineTable th {
+  padding: 5px 12px 5px 40px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.lineRow {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lineRow:last-child {
+  border-bottom: none;
+}
+
+.lineRow td {
+  padding: 6px 12px 6px 40px;
+}
+
+/* ── Klikkbart varenr i linjetabell ── */
+.lineVarenr {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-family: monospace;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lineVarenr:hover {
+  opacity: 0.7;
+}
+
+/* ── Lokasjonsbadge i linjetabell ── */
+.locationBadge {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ── Fullt mottatt ── */
+.receivedFull {
+  color: #22c55e;
+  font-weight: 600;
 }
