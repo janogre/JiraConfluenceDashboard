@@ -45,16 +45,21 @@ async function enrichWithLocationCodes(orders) {
   const locations = await getBcLocations();
   const locationMap = new Map(locations.map((l) => [l.id, l.code]));
 
-  return orders.map((order) => ({
-    ...order,
-    purchaseOrderLines: (order.purchaseOrderLines ?? []).map((line) => {
-      const locationCode = locationMap.get(line.locationId);
-      if (!locationCode && line.locationId) {
-        console.warn(`[BC orders] Ukjent locationId: ${line.locationId} – setter UKJENT`);
-      }
-      return { ...line, locationCode: locationCode ?? 'UKJENT' };
-    }),
-  }));
+  return orders.map((order) => {
+    if (!order.purchaseOrderLines) {
+      console.warn(`[BC orders] Ordre ${order.number} mangler purchaseOrderLines – returnerer tom liste`);
+    }
+    return {
+      ...order,
+      purchaseOrderLines: (order.purchaseOrderLines ?? []).map((line) => {
+        const locationCode = locationMap.get(line.locationId);
+        if (!locationCode && line.locationId) {
+          console.warn(`[BC orders] Ukjent locationId: ${line.locationId} – setter UKJENT`);
+        }
+        return { ...line, locationCode: locationCode ?? 'UKJENT' };
+      }),
+    };
+  });
 }
 
 export async function getBcPurchaseOrders() {
