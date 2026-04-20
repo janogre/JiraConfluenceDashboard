@@ -272,3 +272,46 @@ export interface BcItemsResponse {
   items: BcItem[];
   fetchedAt: string;
 }
+
+export interface BcLocation {
+  id: string;
+  code: string;
+  displayName: string;
+}
+
+export interface BcLocationsResponse {
+  locations: BcLocation[];
+  neasLocationCodes: string[];
+  fetchedAt: string;
+}
+
+export interface BcPurchaseOrderLine {
+  lineObjectNumber: string;
+  description: string;
+  quantity: number;
+  receivedQuantity: number;
+  invoicedQuantity: number;
+  expectedReceiptDate: string;
+  locationId: string;
+  unitOfMeasureCode: string;
+  locationCode: string; // beriket server-side; 'UKJENT' hvis locationId ikke finnes i cache
+}
+
+export interface BcPurchaseOrder {
+  id: string;
+  number: string;
+  orderDate: string;
+  vendorNumber: string;
+  vendorName: string;
+  status: 'Draft' | 'Open' | 'Released' | string;
+  shipToName: string;
+  purchaser: string;
+  fullyReceived: boolean;
+  lastModifiedDateTime: string;
+  purchaseOrderLines: BcPurchaseOrderLine[];
+}
+
+export interface BcPurchaseOrdersResponse {
+  orders: BcPurchaseOrder[];
+  fetchedAt: string;
+}
