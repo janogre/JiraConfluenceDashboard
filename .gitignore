@@ -3,6 +3,9 @@ server/.env
 .env
 server/sessions/
 
+# Git worktrees
+.worktrees/
+
 # Logs
 logs
 *.log
