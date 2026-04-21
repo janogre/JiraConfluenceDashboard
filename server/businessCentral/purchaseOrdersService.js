@@ -1,6 +1,39 @@
 import { getBcToken, invalidateBcTokenCache } from './auth.js';
 import { getBcLocations } from './locationsService.js';
 
+/**
+ * Beregner utledet status for en innkjøpsordre basert på linjedata.
+ *
+ * BC-feltet `status` (Draft/Open) matcher ikke det brukerne ser i BC-klienten,
+ * og NEAS bruker ikke kladd-funksjonen som en ekte arbeidsflate. `fullyReceived`
+ * avviker fra linjedata i ~10% av tilfellene. Derfor ignorerer vi begge felter
+ * og beregner status fra sum av bestilte vs. mottatte antall.
+ *
+ * Ref: docs/superpowers/specs/2026-04-21-bc-derived-status-design.md
+ *
+ * @param {Array<{quantity: number, receivedQuantity: number}>} lines
+ * @returns {'Bestilt' | 'Delvis mottatt' | 'Mottatt' | 'Ufullstendig'}
+ *
+ * @example
+ *   computeDerivedStatus([])                                           // 'Ufullstendig'
+ *   computeDerivedStatus([{quantity: 5, receivedQuantity: 0}])         // 'Bestilt'
+ *   computeDerivedStatus([{quantity: 5, receivedQuantity: 2}])         // 'Delvis mottatt'
+ *   computeDerivedStatus([{quantity: 5, receivedQuantity: 5}])         // 'Mottatt'
+ *   computeDerivedStatus([                                              // 'Delvis mottatt'
+ *     {quantity: 3, receivedQuantity: 3},
+ *     {quantity: 2, receivedQuantity: 0},
+ *   ])
+ *   computeDerivedStatus([{quantity: 5, receivedQuantity: 7}])         // 'Mottatt' (over-mottak)
+ */
+export function computeDerivedStatus(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return 'Ufullstendig';
+  const totalQty = lines.reduce((s, l) => s + (l.quantity ?? 0), 0);
+  const totalRecv = lines.reduce((s, l) => s + (l.receivedQuantity ?? 0), 0);
+  if (totalRecv === 0) return 'Bestilt';
+  if (totalRecv < totalQty) return 'Delvis mottatt';
+  return 'Mottatt';
+}
+
 async function fetchAllPages(token) {
   const select =
     'id,number,orderDate,vendorNumber,vendorName,status,shipToName,purchaser,fullyReceived,lastModifiedDateTime';
