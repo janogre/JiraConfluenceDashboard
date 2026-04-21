@@ -28,6 +28,31 @@ function statusClass(status: string): string {
   }
 }
 
+/**
+ * Ordrer som har ligget åpne over ett år er nesten alltid et
+ * BC-oppryddingsproblem (ikke lukket korrekt), ikke reelle aktive
+ * bestillinger. Markeres visuelt så brukeren kan vurdere opprydning –
+ * men skjules ikke: NEAS vil se dem for å kunne rydde.
+ */
+function isOldOrder(orderDate: string): boolean {
+  if (!orderDate) return false;
+  const age = Date.now() - new Date(orderDate).getTime();
+  return age > 365 * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * expectedReceiptDate i BC er ofte identisk med orderDate fordi
+ * realistiske leveringsdatoer ikke finnes i systemet p.t. Viser
+ * feltet ærlig: "(ikke satt)" når det er tomt, `0001-01-01` eller
+ * likt orderDate, ellers formatert dato.
+ */
+function formatExpectedDate(expected: string, orderDate: string): React.ReactNode {
+  if (!expected || expected.startsWith('0001-') || expected === orderDate) {
+    return <span className={styles.dateMuted}>(ikke satt)</span>;
+  }
+  return formatDate(expected);
+}
+
 interface Props {
   initialSearch?: string;
   onGoToLager: (varenr: string) => void;
@@ -235,8 +260,9 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                 return (
                   <React.Fragment key={order.id}>
                     <tr
-                      className={styles.orderRow}
+                      className={`${styles.orderRow} ${isOldOrder(order.orderDate) ? styles.orderRowOld : ''}`}
                       onClick={() => toggleOrder(order.id)}
+                      title={isOldOrder(order.orderDate) ? 'Bestilt for over ett år siden – muligens ikke lukket korrekt' : undefined}
                     >
                       <td className={styles.expandBtn}>{isExpanded ? '▼' : '▶'}</td>
                       <td className={styles.varenr}>{order.number}</td>
@@ -292,7 +318,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                                     {line.receivedQuantity}
                                   </td>
                                   <td className={styles.dateCell}>{line.unitOfMeasureCode}</td>
-                                  <td className={styles.dateCell}>{formatDate(line.expectedReceiptDate)}</td>
+                                  <td className={styles.dateCell}>{formatExpectedDate(line.expectedReceiptDate, order.orderDate)}</td>
                                 </tr>
                               ))}
                             </tbody>
