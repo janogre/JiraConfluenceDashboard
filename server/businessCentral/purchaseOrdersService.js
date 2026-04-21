@@ -35,8 +35,9 @@ export function computeDerivedStatus(lines) {
 }
 
 async function fetchAllPages(token) {
+  // status droppet – erstattet av derivedStatus, se computeDerivedStatus
   const select =
-    'id,number,orderDate,vendorNumber,vendorName,status,shipToName,purchaser,fullyReceived,lastModifiedDateTime';
+    'id,number,orderDate,vendorNumber,vendorName,shipToName,purchaser,fullyReceived,lastModifiedDateTime';
   const expand =
     'purchaseOrderLines($select=lineObjectNumber,description,quantity,receivedQuantity,' +
     'invoicedQuantity,expectedReceiptDate,locationId,unitOfMeasureCode)';
@@ -95,18 +96,25 @@ async function enrichWithLocationCodes(orders) {
   });
 }
 
+function enrichWithDerivedStatus(orders) {
+  return orders.map((order) => ({
+    ...order,
+    derivedStatus: computeDerivedStatus(order.purchaseOrderLines),
+  }));
+}
+
 export async function getBcPurchaseOrders() {
   let token = await getBcToken();
   try {
     const orders = await fetchAllPages(token);
-    return await enrichWithLocationCodes(orders);
+    return enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
   } catch (err) {
     if (err.status === 401) {
       console.log('[BC orders] 401 – invaliderer token-cache og prøver på nytt');
       invalidateBcTokenCache();
       token = await getBcToken();
       const orders = await fetchAllPages(token);
-      return await enrichWithLocationCodes(orders);
+      return enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
     }
     throw err;
   }
