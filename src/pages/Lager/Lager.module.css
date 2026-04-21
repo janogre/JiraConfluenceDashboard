@@ -204,6 +204,12 @@
   white-space: nowrap;
 }
 
+.dateMuted {
+  color: var(--color-text-secondary);
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .error {
   margin: 24px 0;
   padding: 16px 20px;
@@ -311,8 +317,12 @@
   background: var(--color-bg-secondary);
 }
 
-.orderRowDraft {
-  opacity: 0.6;
+.orderRowOld {
+  border-left: 3px solid #f59e0b;
+}
+
+.orderRowOld td:first-child {
+  padding-left: 9px;
 }
 
 .expandBtn {
@@ -323,7 +333,29 @@
 }
 
 /* ── Status-badges ── */
-.statusBadgeOpen {
+.statusBadgeBestilt {
+  background: #3b82f622;
+  color: #3b82f6;
+  border: 1px solid #3b82f644;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusBadgeDelvis {
+  background: #f59e0b22;
+  color: #f59e0b;
+  border: 1px solid #f59e0b44;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusBadgeMottatt {
   background: #22c55e22;
   color: #22c55e;
   border: 1px solid #22c55e44;
@@ -334,7 +366,7 @@
   white-space: nowrap;
 }
 
-.statusBadgeDraft {
+.statusBadgeUfullstendig {
   background: var(--color-bg-secondary);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
