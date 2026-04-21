@@ -18,6 +18,16 @@ function sortIcon(field: OrderSortField, current: OrderSortField, dir: SortDir):
   return dir === 'asc' ? ' ↑' : ' ↓';
 }
 
+function statusClass(status: string): string {
+  switch (status) {
+    case 'Bestilt':        return styles.statusBadgeBestilt;
+    case 'Delvis mottatt': return styles.statusBadgeDelvis;
+    case 'Mottatt':        return styles.statusBadgeMottatt;
+    case 'Ufullstendig':   return styles.statusBadgeUfullstendig;
+    default:               return styles.statusBadgeUfullstendig;
+  }
+}
+
 interface Props {
   initialSearch?: string;
   onGoToLager: (varenr: string) => void;
@@ -52,16 +62,11 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
     return [...new Set(data.orders.map((o) => o.vendorName))].sort();
   }, [data]);
 
-  const allStatuses = useMemo(() => {
-    if (!data) return [];
-    return [...new Set(data.orders.map((o) => o.status))].sort();
-  }, [data]);
-
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = search.toLowerCase();
     return data.orders.filter((order) => {
-      if (statusFilter && order.status !== statusFilter) return false;
+      if (statusFilter && order.derivedStatus !== statusFilter) return false;
       if (vendorFilter && order.vendorName !== vendorFilter) return false;
       if (locationFilter) {
         const hasLocation = order.purchaseOrderLines.some((l) => l.locationCode === locationFilter);
@@ -140,7 +145,9 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
 
         <select className={styles.select} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">Alle statuser</option>
-          {allStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="Bestilt">Bestilt</option>
+          <option value="Delvis mottatt">Delvis mottatt</option>
+          <option value="Mottatt">Mottatt</option>
         </select>
 
         <select className={styles.select} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
@@ -214,7 +221,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                 return (
                   <React.Fragment key={order.id}>
                     <tr
-                      className={`${styles.orderRow} ${order.status === 'Draft' ? styles.orderRowDraft : ''}`}
+                      className={styles.orderRow}
                       onClick={() => toggleOrder(order.id)}
                     >
                       <td className={styles.expandBtn}>{isExpanded ? '▼' : '▶'}</td>
@@ -224,8 +231,8 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                       <td className={styles.dateCell}>{order.shipToName}</td>
                       <td className={styles.dateCell}>{order.purchaser}</td>
                       <td>
-                        <span className={order.status === 'Open' ? styles.statusBadgeOpen : styles.statusBadgeDraft}>
-                          {order.status}
+                        <span className={statusClass(order.derivedStatus)}>
+                          {order.derivedStatus}
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }} className={styles.dateCell}>
