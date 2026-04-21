@@ -38,6 +38,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
   const [statusFilter, setStatusFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState('');
+  const [showIncomplete, setShowIncomplete] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [sortField, setSortField]     = useState<OrderSortField>('orderDate');
   const [sortDir, setSortDir]         = useState<SortDir>('desc');
@@ -66,6 +67,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
     if (!data) return [];
     const q = search.toLowerCase();
     return data.orders.filter((order) => {
+      if (!showIncomplete && order.derivedStatus === 'Ufullstendig') return false;
       if (statusFilter && order.derivedStatus !== statusFilter) return false;
       if (vendorFilter && order.vendorName !== vendorFilter) return false;
       if (locationFilter) {
@@ -81,7 +83,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
       }
       return true;
     });
-  }, [data, search, statusFilter, locationFilter, vendorFilter]);
+  }, [data, search, statusFilter, locationFilter, vendorFilter, showIncomplete]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -160,6 +162,14 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
           {allVendors.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
 
+        <label className={styles.toggleLabel}>
+          <div
+            className={`${styles.toggle} ${showIncomplete ? styles.toggleActive : ''}`}
+            onClick={() => setShowIncomplete((v) => !v)}
+          />
+          Vis ufullstendige
+        </label>
+
         <button className={styles.refreshBtn} onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw size={14} />
           {isFetching ? 'Henter…' : 'Oppdater'}
@@ -171,6 +181,10 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
         <div className={styles.statusBar}>
           <span>
             Viser {sorted.length} av {data.orders.length} ordrer · {totalLines} linjer totalt
+            {!showIncomplete && (() => {
+              const hidden = data.orders.filter((o) => o.derivedStatus === 'Ufullstendig').length;
+              return hidden > 0 ? ` (${hidden} ufullstendige skjult)` : '';
+            })()}
           </span>
           {fetchedAt && <span>Hentet kl. {fetchedAt}</span>}
         </div>
