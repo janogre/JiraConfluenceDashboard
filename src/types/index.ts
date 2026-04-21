@@ -303,7 +303,7 @@ export interface BcPurchaseOrder {
   orderDate: string;
   vendorNumber: string;
   vendorName: string;
-  status: 'Draft' | 'Open' | 'Released' | string;
+  derivedStatus: 'Bestilt' | 'Delvis mottatt' | 'Mottatt' | 'Ufullstendig';
   shipToName: string;
   purchaser: string;
   fullyReceived: boolean;
