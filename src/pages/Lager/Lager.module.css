@@ -198,6 +198,68 @@
 .inventoryOrange { color: #f59e0b; }
 .inventoryRed    { color: #ef4444; }
 
+.expandToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.expandToggle:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.expandRow td {
+  background: var(--color-bg-secondary);
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.locationGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.locationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  font-size: 12px;
+}
+
+.locationChipNeas {
+  border-color: #1e7a4a66;
+  background: #1e7a4a11;
+}
+
+.locationChipCode {
+  font-family: monospace;
+  color: var(--color-text-secondary);
+}
+
+.locationChipNeas .locationChipCode {
+  color: #1e7a4a;
+  font-weight: 600;
+}
+
+.locationChipQty {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .dateCell {
   font-size: 12px;
   color: var(--color-text-secondary);

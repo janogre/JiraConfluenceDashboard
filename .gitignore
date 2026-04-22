@@ -2,6 +2,7 @@
 server/.env
 .env
 server/sessions/
+sessions/
 
 # Git worktrees
 .worktrees/

@@ -266,6 +266,7 @@ export interface BcItem {
   inventory: number;
   inventoryPostingGroupCode: string;
   lastModifiedDateTime: string;
+  inventoryByLocation: Record<string, number>;
 }
 
 export interface BcItemsResponse {

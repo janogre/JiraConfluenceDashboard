@@ -1,4 +1,5 @@
 import { getBcToken, invalidateBcTokenCache } from './auth.js';
+import { getInventoryByLocation } from './inventoryByLocationService.js';
 
 function buildOdataFilter() {
   const groups = (process.env.BC_ITEM_GROUPS || 'KOM,DRIFT')
@@ -45,16 +46,31 @@ async function fetchAllPages(token) {
   return items;
 }
 
+async function enrichWithInventoryByLocation(items) {
+  try {
+    const byLoc = await getInventoryByLocation();
+    return items.map((item) => ({
+      ...item,
+      inventoryByLocation: byLoc.get(item.number) ?? {},
+    }));
+  } catch (err) {
+    console.warn('[BC items] Kunne ikke hente inventoryByLocation – returnerer uten:', err.message);
+    return items.map((item) => ({ ...item, inventoryByLocation: {} }));
+  }
+}
+
 export async function getBcItems() {
   let token = await getBcToken();
   try {
-    return await fetchAllPages(token);
+    const items = await fetchAllPages(token);
+    return await enrichWithInventoryByLocation(items);
   } catch (err) {
     if (err.status === 401) {
       console.log('[BC items] 401 mottatt – invaliderer cache og prøver på nytt');
       invalidateBcTokenCache();
       token = await getBcToken();
-      return await fetchAllPages(token);
+      const items = await fetchAllPages(token);
+      return await enrichWithInventoryByLocation(items);
     }
     throw err;
   }
