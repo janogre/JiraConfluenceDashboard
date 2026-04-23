@@ -65,6 +65,28 @@ async function ensureFreshToken(sess) {
   }
 }
 
+// ─── Env-basert apikey-fallback ──────────────────────────────────────────────
+
+/**
+ * Leser Atlassian apikey-kredensialer fra miljøvariabler. Brukes som fallback
+ * når session mangler auth — slik at kredensialer overlever logout og
+ * server-restart uten å måtte fylles inn via UI på nytt.
+ *
+ * Returnerer null hvis noen av de påkrevde feltene mangler.
+ */
+function getEnvApiAuth() {
+  const email = process.env.ATLASSIAN_EMAIL;
+  const apiToken = process.env.ATLASSIAN_API_TOKEN;
+  const jiraBaseUrl = process.env.JIRA_BASE_URL;
+  if (!email || !apiToken || !jiraBaseUrl) return null;
+  return {
+    email,
+    apiToken,
+    jiraBaseUrl,
+    confluenceBaseUrl: process.env.CONFLUENCE_BASE_URL || jiraBaseUrl,
+  };
+}
+
 // ─── Auth-endepunkter ────────────────────────────────────────────────────────
 
 // Start OAuth-flyt
@@ -161,6 +183,15 @@ app.get('/auth/me', (req, res) => {
       confluenceBaseUrl: req.session.confluenceBaseUrl,
     });
   }
+  const envAuth = getEnvApiAuth();
+  if (envAuth) {
+    return res.json({
+      authenticated: true,
+      authMode: 'apikey',
+      jiraBaseUrl: envAuth.jiraBaseUrl,
+      confluenceBaseUrl: envAuth.confluenceBaseUrl,
+    });
+  }
   res.json({ authenticated: false });
 });
 
@@ -216,6 +247,11 @@ async function resolveAuth(req, res) {
   }
   if (req.session.authMode === 'apikey') {
     const cred = Buffer.from(`${req.session.apiKeyEmail}:${req.session.apiKeyToken}`).toString('base64');
+    return { type: 'basic', value: `Basic ${cred}` };
+  }
+  const envAuth = getEnvApiAuth();
+  if (envAuth) {
+    const cred = Buffer.from(`${envAuth.email}:${envAuth.apiToken}`).toString('base64');
     return { type: 'basic', value: `Basic ${cred}` };
   }
   res.status(401).json({ error: 'Ikke autentisert', reauthRequired: true });
@@ -349,7 +385,7 @@ app.all('/api/atlassian/proxy', async (req, res) => {
 
 app.post('/api/ai/digest', async (req, res) => {
   const { messages, apiKey: bodyKey } = req.body;
-  const apiKey = bodyKey || req.session.anthropicApiKey;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -366,7 +402,7 @@ app.post('/api/ai/digest', async (req, res) => {
 
 app.post('/api/ai/timeline-report', async (req, res) => {
   const { apiKey: bodyKey, issues, reportDate } = req.body;
-  const apiKey = bodyKey || req.session.anthropicApiKey;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
   if (!issues || !issues.length) return res.status(400).json({ error: 'Mangler saker' });
 
@@ -415,7 +451,7 @@ Rapporten skal egne seg som vedlegg til et styremøte eller prosjektstatusrappor
 
 app.post('/api/ai/rewrite-meeting', async (req, res) => {
   const { notes, attendees, context, apiKey: bodyKey } = req.body;
-  const apiKey = bodyKey || req.session.anthropicApiKey;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
   if (!notes) return res.status(400).json({ error: 'Mangler notat-innhold' });
 
@@ -464,7 +500,7 @@ Regler:
 
 app.post('/api/ai/project-documents', async (req, res) => {
   const { apiKey: bodyKey, documents, projectInfo, additionalInfo } = req.body;
-  const apiKey = bodyKey || req.session.anthropicApiKey;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
   if (!documents || !documents.length) return res.status(400).json({ error: 'Mangler dokumentliste' });
 
@@ -529,7 +565,7 @@ Returner KUN et gyldig JSON-array uten annen tekst.`;
 
 app.post('/api/ai/suggest-subtasks', async (req, res) => {
   const { apiKey: bodyKey, projectType, projectInfo, additionalInfo } = req.body;
-  const apiKey = bodyKey || req.session.anthropicApiKey;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
 
   const isType2 = projectType === 'type2';
