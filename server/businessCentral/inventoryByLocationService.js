@@ -2,10 +2,36 @@ import { getBcToken, invalidateBcTokenCache } from './auth.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = { data: null, expiresAt: 0 };
+let companyNameCache = null;
+
+async function resolveCompanyName(token) {
+  if (companyNameCache) return companyNameCache;
+
+  const companyId = process.env.BC_COMPANY_ID;
+  if (!companyId) throw new Error('[BC invByLoc] BC_COMPANY_ID mangler i .env');
+
+  const url =
+    `https://api.businesscentral.dynamics.com/v2.0/${process.env.BC_TENANT_ID}` +
+    `/${process.env.BC_ENVIRONMENT}/api/v2.0/companies(${companyId})?$select=name`;
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    const err = new Error(`BC API feilet ved companies-oppslag (${resp.status})`);
+    err.status = resp.status;
+    err.body = body;
+    throw err;
+  }
+  const data = await resp.json();
+  if (!data.name) throw new Error('[BC invByLoc] companies-respons mangler name-felt');
+  companyNameCache = data.name;
+  console.log(`[BC invByLoc] Company-navn oppslått: ${companyNameCache}`);
+  return companyNameCache;
+}
 
 async function fetchOpenLedgerPages(token) {
-  const companyName = process.env.BC_COMPANY_NAME;
-  if (!companyName) throw new Error('[BC invByLoc] BC_COMPANY_NAME mangler i .env');
+  const companyName = await resolveCompanyName(token);
 
   const base = `https://api.businesscentral.dynamics.com/v2.0/${process.env.BC_TENANT_ID}/${process.env.BC_ENVIRONMENT}/ODataV4`;
   const companyUrl = `${base}/Company('${encodeURIComponent(companyName)}')`;
