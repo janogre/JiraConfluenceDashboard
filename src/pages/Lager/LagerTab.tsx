@@ -81,7 +81,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
       if (hideEmpty && item.inventory === 0) return false;
       if (group && item.inventoryPostingGroupCode !== group) return false;
       if (location && !((item.inventoryByLocation?.[location] ?? 0) > 0)) return false;
-      if (q && !item.number.toLowerCase().includes(q) && !item.displayName.toLowerCase().includes(q)) return false;
+      if (q && !item.number.toLowerCase().includes(q) && !item.displayName.toLowerCase().includes(q) && !(item.displayName2 ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
   }, [data, search, group, location, hideEmpty]);
@@ -129,7 +129,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
           <Search size={15} className={styles.searchIcon} />
           <input
             className={styles.searchInput}
-            placeholder="Søk varenr / navn…"
+            placeholder="Søk varenr / navn / beskrivelse…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -224,8 +224,8 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                 >
                   {location ? `LAGER (${location})` : 'LAGER'}{sortIcon('inventory', sortField, sortDir)}
                 </th>
+                <th style={{ textAlign: 'right' }}>I BESTILLING</th>
                 <th>OPPDATERT</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -264,18 +264,28 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                       >
                         {qtyFor(item)}
                       </td>
-                      <td className={styles.dateCell}>{formatDate(item.lastModifiedDateTime)}</td>
-                      <td>
-                        {item.inventory <= 3 && (
-                          <button
-                            className={styles.crossTabLink}
-                            onClick={(e) => { e.stopPropagation(); onGoToBestillinger(item.number); }}
-                            title="Vis bestillinger for denne varen"
-                          >
-                            Bestillinger →
-                          </button>
-                        )}
+                      <td style={{ textAlign: 'right' }}>
+                        {(() => {
+                          const openOrders = (item.openOrders ?? []).filter(
+                            (o) => !location || o.locationCode === location
+                          );
+                          if (openOrders.length === 0) return null;
+                          const total = openOrders.reduce((s, o) => s + o.outstandingQuantity, 0);
+                          const tooltip = openOrders
+                            .map((o) => `Ordre ${o.orderNumber}: ${o.outstandingQuantity} stk → ${o.locationCode} (${o.vendorName})`)
+                            .join('\n');
+                          return (
+                            <button
+                              className={styles.crossTabLink}
+                              onClick={(e) => { e.stopPropagation(); onGoToBestillinger(item.number); }}
+                              title={tooltip}
+                            >
+                              {total} →
+                            </button>
+                          );
+                        })()}
                       </td>
+                      <td className={styles.dateCell}>{formatDate(item.lastModifiedDateTime)}</td>
                     </tr>
                     {isExpanded && hasLocationData && (
                       <tr className={styles.expandRow}>

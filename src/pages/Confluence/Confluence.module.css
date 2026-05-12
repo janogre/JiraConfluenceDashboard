@@ -280,7 +280,30 @@
 
 /* Tree search */
 .treeSearchWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
   margin-bottom: var(--spacing-sm);
+}
+
+.treeRefreshBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.treeRefreshBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .treeSearchResults {

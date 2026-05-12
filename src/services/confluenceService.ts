@@ -263,34 +263,47 @@ export async function getChildPages(pageId: string): Promise<ConfluencePage[]> {
   const api = getApi();
   const baseUrl = getConfluenceBaseUrl();
 
-  // Primær: CQL parent= henter alle barnetyper (sider, mapper, blogposts)
-  try {
+  // Primær: direkte endepunkt — reflekterer alltid korrekt hierarki (ingen indeks-forsinkelse)
+  const [pagesResult, foldersResult] = await Promise.allSettled([
+    api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+      `${baseUrl}/wiki/rest/api/content/${pageId}/child/page`,
+      { params: { limit: 100, expand: 'version,space,childTypes.page' } }
+    ),
+    // Mapper hentes via CQL siden de ikke returneres av child/page-endepunktet
+    api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
+      `${baseUrl}/wiki/rest/api/content/search`,
+      { params: { cql: `parent=${pageId} AND type=folder`, limit: 100, expand: 'version,space' } }
+    ),
+  ]);
+
+  const pages: ConfluencePage[] = [];
+  let linkedBase = baseUrl;
+
+  if (pagesResult.status === 'fulfilled') {
+    linkedBase = pagesResult.value.data._links?.base || baseUrl;
+    pages.push(...pagesResult.value.data.results.map((p) => mapPage(p, linkedBase)));
+  }
+  if (foldersResult.status === 'fulfilled') {
+    const folderBase = foldersResult.value.data._links?.base || linkedBase;
+    pages.push(...foldersResult.value.data.results.map((p) => mapPage(p, folderBase)));
+  }
+
+  // Fallback hvis direkte endepunkt feilet helt: bruk full CQL
+  if (pagesResult.status === 'rejected' && foldersResult.status === 'rejected') {
     const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
       `${baseUrl}/wiki/rest/api/content/search`,
-      {
-        params: {
-          cql: `parent=${pageId}`,
-          limit: 100,
-          expand: 'version,space,childTypes.page',
-        },
-      }
+      { params: { cql: `parent=${pageId}`, limit: 100, expand: 'version,space,childTypes.page' } }
     );
-    const linkedBase = response.data._links?.base || baseUrl;
-    return response.data.results.map((page) => mapPage(page, linkedBase));
-  } catch {
-    // Fallback: dedikert endepunkt (kun sider, ikke mapper)
-    const response = await api.get<{ results: ConfluenceApiPage[]; _links: { base?: string } }>(
-      `${baseUrl}/wiki/rest/api/content/${pageId}/child/page`,
-      {
-        params: {
-          limit: 100,
-          expand: 'version,space,childTypes.page',
-        },
-      }
-    );
-    const linkedBase = response.data._links?.base || baseUrl;
-    return response.data.results.map((page) => mapPage(page, linkedBase));
+    const base = response.data._links?.base || baseUrl;
+    return response.data.results.map((p) => mapPage(p, base));
   }
+
+  // Sorter: mapper først, deretter sider alfabetisk
+  return pages.sort((a, b) => {
+    if (a.type === 'folder' && b.type !== 'folder') return -1;
+    if (a.type !== 'folder' && b.type === 'folder') return 1;
+    return a.title.localeCompare(b.title, 'nb');
+  });
 }
 
 export async function findPageByTitle(

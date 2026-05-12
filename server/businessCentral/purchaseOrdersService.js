@@ -1,6 +1,9 @@
 import { getBcToken, invalidateBcTokenCache } from './auth.js';
 import { getBcLocations } from './locationsService.js';
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let ordersCache = { data: null, expiresAt: 0 };
+
 /**
  * Beregner utledet status for en innkjøpsordre basert på linjedata.
  *
@@ -104,18 +107,76 @@ function enrichWithDerivedStatus(orders) {
 }
 
 export async function getBcPurchaseOrders() {
+  if (ordersCache.data && Date.now() < ordersCache.expiresAt) {
+    console.log('[BC orders] Cache-treff');
+    return ordersCache.data;
+  }
+
   let token = await getBcToken();
   try {
     const orders = await fetchAllPages(token);
-    return enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+    const enriched = enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+    ordersCache = { data: enriched, expiresAt: Date.now() + CACHE_TTL_MS };
+    return enriched;
   } catch (err) {
     if (err.status === 401) {
       console.log('[BC orders] 401 – invaliderer token-cache og prøver på nytt');
       invalidateBcTokenCache();
       token = await getBcToken();
       const orders = await fetchAllPages(token);
-      return enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+      const enriched = enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+      ordersCache = { data: enriched, expiresAt: Date.now() + CACHE_TTL_MS };
+      return enriched;
     }
     throw err;
   }
+}
+
+export function invalidatePurchaseOrdersCache() {
+  ordersCache = { data: null, expiresAt: 0 };
+  console.log('[BC orders] Cache invalidert');
+}
+
+/**
+ * Bygger en oppslagstabell fra varenummer → liste over åpne ordrer
+ * (status 'Bestilt' eller 'Delvis mottatt') som inneholder den varen.
+ * Brukes til å berike items med "i bestilling"-info.
+ *
+ * @returns {Map<string, Array<{
+ *   orderNumber: string,
+ *   outstandingQuantity: number,
+ *   vendorName: string,
+ *   locationCode: string,
+ *   expectedReceiptDate: string,
+ *   orderDate: string,
+ * }>>}
+ */
+export async function getOpenOrdersByItem() {
+  const orders = await getBcPurchaseOrders();
+  const byItem = new Map();
+
+  for (const order of orders) {
+    if (order.derivedStatus !== 'Bestilt' && order.derivedStatus !== 'Delvis mottatt') continue;
+
+    for (const line of order.purchaseOrderLines ?? []) {
+      const outstanding = (line.quantity ?? 0) - (line.receivedQuantity ?? 0);
+      if (outstanding <= 0) continue;
+      if (!line.lineObjectNumber) continue;
+
+      const entry = {
+        orderNumber: order.number,
+        outstandingQuantity: outstanding,
+        vendorName: order.vendorName,
+        locationCode: line.locationCode ?? 'UKJENT',
+        expectedReceiptDate: line.expectedReceiptDate,
+        orderDate: order.orderDate,
+      };
+
+      const existing = byItem.get(line.lineObjectNumber);
+      if (existing) existing.push(entry);
+      else byItem.set(line.lineObjectNumber, [entry]);
+    }
+  }
+
+  return byItem;
 }

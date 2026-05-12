@@ -17,6 +17,7 @@ import {
   Plus,
   LayoutGrid,
   Table2,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, Input, LoadingOverlay, Modal } from '../../components/common';
 import { useTodoStore } from '../../store/todoStore';
@@ -456,6 +457,7 @@ function saveStarred(keys: Set<string>) {
 }
 
 export function Confluence() {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpace, setSelectedSpace] = useState<ConfluenceSpace | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -824,6 +826,16 @@ export function Confluence() {
                     onChange={(e) => handleTreeSearchChange(e.target.value)}
                     icon={<Search size={15} />}
                   />
+                  <button
+                    className={styles.treeRefreshBtn}
+                    title="Oppdater trestruktur"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['confluenceHomePage', selectedSpace.key] });
+                      queryClient.invalidateQueries({ queryKey: ['confluenceChildren'] });
+                    }}
+                  >
+                    <RefreshCw size={14} />
+                  </button>
                 </div>
               )}
 

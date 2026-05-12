@@ -259,6 +259,15 @@ export interface ApiConfig {
 }
 
 // Business Central – Lager
+export interface BcItemOpenOrder {
+  orderNumber: string;
+  outstandingQuantity: number;
+  vendorName: string;
+  locationCode: string;
+  expectedReceiptDate: string;
+  orderDate: string;
+}
+
 export interface BcItem {
   number: string;
   displayName: string;
@@ -267,6 +276,7 @@ export interface BcItem {
   inventoryPostingGroupCode: string;
   lastModifiedDateTime: string;
   inventoryByLocation: Record<string, number>;
+  openOrders: BcItemOpenOrder[];
 }
 
 export interface BcItemsResponse {
