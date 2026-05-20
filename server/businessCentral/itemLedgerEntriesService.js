@@ -63,12 +63,12 @@ export function classifyMovement(entryType, _quantity) {
   return 'annet';
 }
 
-async function fetchEntriesLast90Days(token) {
+async function fetchEntriesLast30Days(token) {
   const companyName = await resolveCompanyName(token);
   const base = `https://api.businesscentral.dynamics.com/v2.0/${process.env.BC_TENANT_ID}/${process.env.BC_ENVIRONMENT}/ODataV4`;
   const companyUrl = `${base}/Company('${encodeURIComponent(companyName)}')`;
 
-  const fromDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+  const fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toISOString().substring(0, 10);
   // Filtrer bort Transfer på serveren – ekskluderes fra forbruk uansett, og
   // det reduserer datamengden vesentlig (Transfer mellom NEAS-lokasjoner).
@@ -126,15 +126,27 @@ async function fetchEntriesLast90Days(token) {
  *   ], new Date('2026-05-20'))
  *   // → { A: { last30d: 3, last90d: 5, lastMovementDate: '2026-05-15' } }
  */
+/**
+ * Aggregerer ItemLedgerEntry-rader til per-vare-forbruk siste 30 dager,
+ * samt dato for siste bevegelse.
+ *
+ * Kun rader klassifisert som 'uttak' (Sale, Consumption, Negative Adjmt.)
+ * telles som forbruk. `Transfer` ekskluderes for å unngå dobbelttelling
+ * mellom lokasjoner. Innskudd (Purchase/Output/Positive Adjmt.) bidrar
+ * til `lastMovementDate` men ikke til forbruk.
+ *
+ * @param {Array<{Item_No: string, Posting_Date: string, Entry_Type: string, Quantity: number}>} rows
+ * @param {Date} [now=new Date()]  Referansetidspunkt (eksponert for testbarhet)
+ * @returns {Record<string, { last30d: number, lastMovementDate: string | null }>}
+ */
 export function aggregateConsumption(rows, now = new Date()) {
   const ms30 = 30 * 24 * 60 * 60 * 1000;
-  const ms90 = 90 * 24 * 60 * 60 * 1000;
   const nowMs = now.getTime();
   const result = {};
 
   for (const r of rows) {
     if (!r.Item_No || !r.Posting_Date) continue;
-    const cur = (result[r.Item_No] ??= { last30d: 0, last90d: 0, lastMovementDate: null });
+    const cur = (result[r.Item_No] ??= { last30d: 0, lastMovementDate: null });
 
     if (!cur.lastMovementDate || r.Posting_Date > cur.lastMovementDate) {
       cur.lastMovementDate = r.Posting_Date;
@@ -146,7 +158,6 @@ export function aggregateConsumption(rows, now = new Date()) {
     const qty = Math.abs(r.Quantity ?? 0);
     const ageMs = nowMs - new Date(r.Posting_Date).getTime();
     if (ageMs <= ms30) cur.last30d += qty;
-    if (ageMs <= ms90) cur.last90d += qty;
   }
 
   return result;
@@ -168,7 +179,7 @@ export async function getItemConsumption() {
   consumptionInFlight = (async () => {
     let token = await getBcToken();
     try {
-      const rows = await fetchEntriesLast90Days(token);
+      const rows = await fetchEntriesLast30Days(token);
       const data = aggregateConsumption(rows);
       consumptionCache = { data, expiresAt: Date.now() + CONSUMPTION_CACHE_TTL_MS };
       return data;
@@ -177,7 +188,7 @@ export async function getItemConsumption() {
         console.log('[BC ledger] 401 – invaliderer token og prøver igjen');
         invalidateBcTokenCache();
         token = await getBcToken();
-        const rows = await fetchEntriesLast90Days(token);
+        const rows = await fetchEntriesLast30Days(token);
         const data = aggregateConsumption(rows);
         consumptionCache = { data, expiresAt: Date.now() + CONSUMPTION_CACHE_TTL_MS };
         return data;
@@ -201,7 +212,7 @@ export function invalidateConsumptionCache() {
  * Ingen server-side cache – frontend bruker TanStack Query (5 min staleTime).
  *
  * @param {string} itemNumber     Eksakt match på BC `Item_No`
- * @param {string} [fromDate]     ISO-dato (YYYY-MM-DD). Default: ett år tilbake
+ * @param {string} [fromDate]     ISO-dato (YYYY-MM-DD). Default: 30 dager tilbake
  * @returns {Promise<Array<object>>}  Råe BC-rader (ikke transformerte feltnavn)
  */
 export async function getItemLedgerEntries(itemNumber, fromDate) {
@@ -211,7 +222,7 @@ export async function getItemLedgerEntries(itemNumber, fromDate) {
     throw err;
   }
   const safeItem = itemNumber.replace(/'/g, "''");
-  const from = fromDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+  const from = fromDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toISOString().substring(0, 10);
 
   const fetchOnce = async (token) => {

@@ -9,7 +9,7 @@ const NEAS_LOCATION_CODES = new Set([
   'M1', 'OPPDAL HK', 'RØROS HK', 'CAMPUS', 'DIR', 'SINUS BNN', 'SINUS SSJ',
 ]);
 
-type SortField = 'number' | 'displayName' | 'inventory' | 'consumption90d' | 'lastMovement';
+type SortField = 'number' | 'displayName' | 'inventory' | 'consumption30d' | 'lastMovement';
 type SortDir = 'asc' | 'desc';
 
 function formatDate(iso: string): string {
@@ -110,7 +110,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
     const q = search.toLowerCase();
     return itemsWithConsumption.filter((item) => {
       if (hideEmpty && item.inventory === 0) return false;
-      if (hideDead && (item.consumption?.last90d ?? 0) === 0) return false;
+      if (hideDead && (item.consumption?.last30d ?? 0) === 0) return false;
       if (group && item.inventoryPostingGroupCode !== group) return false;
       if (location && !((item.inventoryByLocation?.[location] ?? 0) > 0)) return false;
       if (q && !item.number.toLowerCase().includes(q) && !item.displayName.toLowerCase().includes(q) && !(item.displayName2 ?? '').toLowerCase().includes(q)) return false;
@@ -127,7 +127,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
       if (sortField === 'number')         cmp = a.number.localeCompare(b.number);
       if (sortField === 'displayName')    cmp = a.displayName.localeCompare(b.displayName);
       if (sortField === 'inventory')      cmp = qtyFor(a) - qtyFor(b);
-      if (sortField === 'consumption90d') cmp = (a.consumption?.last90d ?? 0) - (b.consumption?.last90d ?? 0);
+      if (sortField === 'consumption30d') cmp = (a.consumption?.last30d ?? 0) - (b.consumption?.last30d ?? 0);
       if (sortField === 'lastMovement') {
         const aTime = a.consumption?.lastMovementDate ? new Date(a.consumption.lastMovementDate).getTime() : 0;
         const bTime = b.consumption?.lastMovementDate ? new Date(b.consumption.lastMovementDate).getTime() : 0;
@@ -211,7 +211,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
             className={`${styles.toggle} ${hideDead ? styles.toggleActive : ''}`}
             onClick={() => setHideDead((v) => !v)}
           />
-          Skjul døde varer (0 forbruk 90d)
+          Skjul døde varer (0 forbruk 30d)
         </label>
 
         <button
@@ -274,10 +274,10 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                 <th
                   className={styles.sortable}
                   style={{ textAlign: 'right' }}
-                  onClick={() => toggleSort('consumption90d')}
-                  title="Sum |uttak| siste 90 dager (Sale + Consumption + Negative Adjmt., ekskl. Transfer)"
+                  onClick={() => toggleSort('consumption30d')}
+                  title="Sum |uttak| siste 30 dager (Sale + Consumption + Negative Adjmt., ekskl. Transfer)"
                 >
-                  FORBRUK 90D{sortIcon('consumption90d', sortField, sortDir)}
+                  FORBRUK 30D{sortIcon('consumption30d', sortField, sortDir)}
                 </th>
                 <th
                   className={styles.sortable}
@@ -344,8 +344,8 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                         })()}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <span className={(item.consumption?.last90d ?? 0) === 0 ? styles.inventoryDead : ''}>
-                          {item.consumption?.last90d ?? 0}
+                        <span className={(item.consumption?.last30d ?? 0) === 0 ? styles.inventoryDead : ''}>
+                          {item.consumption?.last30d ?? 0}
                         </span>
                       </td>
                       <td>

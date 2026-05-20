@@ -302,7 +302,6 @@ export interface BcItemLedgerEntry {
 
 export interface BcItemConsumption {
   last30d: number;
-  last90d: number;
   lastMovementDate: string | null;
 }
 
