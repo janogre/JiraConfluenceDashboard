@@ -70,7 +70,11 @@ async function fetchEntriesLast90Days(token) {
 
   const fromDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
     .toISOString().substring(0, 10);
-  const filter = encodeURIComponent(`Posting_Date ge ${fromDate}`);
+  // Filtrer bort Transfer på serveren – ekskluderes fra forbruk uansett, og
+  // det reduserer datamengden vesentlig (Transfer mellom NEAS-lokasjoner).
+  const filter = encodeURIComponent(
+    `Posting_Date ge ${fromDate} and Entry_Type ne 'Transfer'`
+  );
   const select = 'Item_No,Posting_Date,Entry_Type,Quantity';
   // VIKTIG: dropp $top – BC OData Pages returnerer ikke @odata.nextLink når
   // $top er satt, så paginering bryter og data går tapt. Uten $top bruker
@@ -148,30 +152,43 @@ export function aggregateConsumption(rows, now = new Date()) {
   return result;
 }
 
+let consumptionInFlight = null;
+
 export async function getItemConsumption() {
   if (consumptionCache.data && Date.now() < consumptionCache.expiresAt) {
     console.log('[BC ledger] consumption cache-treff');
     return consumptionCache.data;
   }
+  // Dedupliser samtidige kall: returner samme Promise hvis henting allerede pågår.
+  if (consumptionInFlight) {
+    console.log('[BC ledger] consumption henting allerede i gang – venter');
+    return consumptionInFlight;
+  }
 
-  let token = await getBcToken();
-  try {
-    const rows = await fetchEntriesLast90Days(token);
-    const data = aggregateConsumption(rows);
-    consumptionCache = { data, expiresAt: Date.now() + CONSUMPTION_CACHE_TTL_MS };
-    return data;
-  } catch (err) {
-    if (err.status === 401) {
-      console.log('[BC ledger] 401 – invaliderer token og prøver igjen');
-      invalidateBcTokenCache();
-      token = await getBcToken();
+  consumptionInFlight = (async () => {
+    let token = await getBcToken();
+    try {
       const rows = await fetchEntriesLast90Days(token);
       const data = aggregateConsumption(rows);
       consumptionCache = { data, expiresAt: Date.now() + CONSUMPTION_CACHE_TTL_MS };
       return data;
+    } catch (err) {
+      if (err.status === 401) {
+        console.log('[BC ledger] 401 – invaliderer token og prøver igjen');
+        invalidateBcTokenCache();
+        token = await getBcToken();
+        const rows = await fetchEntriesLast90Days(token);
+        const data = aggregateConsumption(rows);
+        consumptionCache = { data, expiresAt: Date.now() + CONSUMPTION_CACHE_TTL_MS };
+        return data;
+      }
+      throw err;
+    } finally {
+      consumptionInFlight = null;
     }
-    throw err;
-  }
+  })();
+
+  return consumptionInFlight;
 }
 
 export function invalidateConsumptionCache() {

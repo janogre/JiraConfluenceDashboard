@@ -1,7 +1,7 @@
 import { Fragment, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, RefreshCw, Package, ChevronRight, ChevronDown } from 'lucide-react';
-import { fetchBcItems, fetchBcItemLedgerEntries } from '../../services/bcService';
+import { fetchBcItems, fetchBcItemLedgerEntries, fetchBcItemConsumption } from '../../services/bcService';
 import type { BcItem, BcItemLedgerEntry } from '../../types';
 import styles from './Lager.module.css';
 
@@ -72,15 +72,30 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Hentes separat – /items skal ikke blokkere på 53 sider ItemLedgerEntries.
+  // Forbrukstall popper inn etter ~30-60s når dette endepunktet svarer.
+  const { data: consumptionData } = useQuery({
+    queryKey: ['bc-item-consumption'],
+    queryFn: fetchBcItemConsumption,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const itemsWithConsumption = useMemo<BcItem[] | undefined>(() => {
+    if (!data) return undefined;
+    const cmap = consumptionData?.consumption;
+    if (!cmap) return data.items;
+    return data.items.map((it) => ({ ...it, consumption: cmap[it.number] }));
+  }, [data, consumptionData]);
+
   const allGroups = useMemo(() => {
-    if (!data) return [];
-    return [...new Set(data.items.map((i) => i.inventoryPostingGroupCode))].sort();
-  }, [data]);
+    if (!itemsWithConsumption) return [];
+    return [...new Set(itemsWithConsumption.map((i) => i.inventoryPostingGroupCode))].sort();
+  }, [itemsWithConsumption]);
 
   const allLocations = useMemo(() => {
-    if (!data) return [];
+    if (!itemsWithConsumption) return [];
     const seen = new Set<string>();
-    for (const item of data.items) {
+    for (const item of itemsWithConsumption) {
       for (const [loc, qty] of Object.entries(item.inventoryByLocation ?? {})) {
         if (qty > 0) seen.add(loc);
       }
@@ -88,12 +103,12 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
     const neas = [...seen].filter((l) => NEAS_LOCATION_CODES.has(l)).sort();
     const ext  = [...seen].filter((l) => !NEAS_LOCATION_CODES.has(l)).sort();
     return [...neas, ...ext];
-  }, [data]);
+  }, [itemsWithConsumption]);
 
   const filtered = useMemo(() => {
-    if (!data) return [];
+    if (!itemsWithConsumption) return [];
     const q = search.toLowerCase();
-    return data.items.filter((item) => {
+    return itemsWithConsumption.filter((item) => {
       if (hideEmpty && item.inventory === 0) return false;
       if (hideDead && (item.consumption?.last90d ?? 0) === 0) return false;
       if (group && item.inventoryPostingGroupCode !== group) return false;
@@ -101,7 +116,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
       if (q && !item.number.toLowerCase().includes(q) && !item.displayName.toLowerCase().includes(q) && !(item.displayName2 ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data, search, group, location, hideEmpty, hideDead]);
+  }, [itemsWithConsumption, search, group, location, hideEmpty, hideDead]);
 
   const qtyFor = (item: BcItem) =>
     location ? (item.inventoryByLocation?.[location] ?? 0) : item.inventory;

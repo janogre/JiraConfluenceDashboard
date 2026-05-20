@@ -1,7 +1,7 @@
 import { getApi } from './api';
 import type {
   BcItemsResponse, BcLocationsResponse, BcPurchaseOrdersResponse,
-  BcItemLedgerEntriesResponse,
+  BcItemLedgerEntriesResponse, BcItemConsumptionResponse,
 } from '../types';
 
 export async function fetchBcItems(): Promise<BcItemsResponse> {
@@ -16,6 +16,11 @@ export async function fetchBcLocations(): Promise<BcLocationsResponse> {
 
 export async function fetchBcPurchaseOrders(): Promise<BcPurchaseOrdersResponse> {
   const resp = await getApi().get<BcPurchaseOrdersResponse>('/api/bc/purchase-orders');
+  return resp.data;
+}
+
+export async function fetchBcItemConsumption(): Promise<BcItemConsumptionResponse> {
+  const resp = await getApi().get<BcItemConsumptionResponse>('/api/bc/item-consumption');
   return resp.data;
 }
 

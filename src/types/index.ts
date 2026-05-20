@@ -277,7 +277,9 @@ export interface BcItem {
   lastModifiedDateTime: string;
   inventoryByLocation: Record<string, number>;
   openOrders: BcItemOpenOrder[];
-  consumption: BcItemConsumption;
+  // Consumption lastes via separat /item-consumption-endepunkt og merges på
+  // klientsiden – frontend skal ikke vente på dette for å vise lagerlisten.
+  consumption?: BcItemConsumption;
 }
 
 export type BcItemLedgerEntryType =
@@ -302,6 +304,11 @@ export interface BcItemConsumption {
   last30d: number;
   last90d: number;
   lastMovementDate: string | null;
+}
+
+export interface BcItemConsumptionResponse {
+  consumption: Record<string, BcItemConsumption>;
+  fetchedAt: string;
 }
 
 export interface BcItemLedgerEntriesResponse {
