@@ -402,16 +402,30 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
 }
 
 function MovementsList({ itemNumber }: { itemNumber: string }) {
+  const [show, setShow] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['bc-item-ledger', itemNumber],
     queryFn: () => fetchBcItemLedgerEntries(itemNumber),
     staleTime: 1000 * 60 * 5,
+    enabled: show,
   });
+
+  if (!show) {
+    return (
+      <button
+        type="button"
+        className={styles.showMovementsButton}
+        onClick={() => setShow(true)}
+      >
+        Vis bevegelser siste 30 dager
+      </button>
+    );
+  }
 
   if (isLoading) return <div className={styles.movementsLoading}>Laster bevegelser…</div>;
   if (isError)   return <div className={styles.movementsError}>Kunne ikke laste bevegelser.</div>;
   const entries = data?.entries ?? [];
-  if (entries.length === 0) return <div className={styles.movementsEmpty}>Ingen bevegelser siste år.</div>;
+  if (entries.length === 0) return <div className={styles.movementsEmpty}>Ingen bevegelser siste 30 dager.</div>;
 
   return (
     <table className={styles.movementsTable}>
