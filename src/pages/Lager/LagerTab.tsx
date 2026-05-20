@@ -1,19 +1,34 @@
 import { Fragment, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, RefreshCw, Package, ChevronRight, ChevronDown } from 'lucide-react';
-import { fetchBcItems } from '../../services/bcService';
-import type { BcItem } from '../../types';
+import { fetchBcItems, fetchBcItemLedgerEntries } from '../../services/bcService';
+import type { BcItem, BcItemLedgerEntry } from '../../types';
 import styles from './Lager.module.css';
 
 const NEAS_LOCATION_CODES = new Set([
   'M1', 'OPPDAL HK', 'RØROS HK', 'CAMPUS', 'DIR', 'SINUS BNN', 'SINUS SSJ',
 ]);
 
-type SortField = 'number' | 'displayName' | 'inventory';
+type SortField = 'number' | 'displayName' | 'inventory' | 'consumption90d' | 'lastMovement';
 type SortDir = 'asc' | 'desc';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return 'Ingen bevegelse';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000));
+  if (days < 1) return 'I dag';
+  if (days === 1) return 'I går';
+  if (days < 30) return `${days} d siden`;
+  if (days < 365) return `${Math.floor(days / 30)} mnd siden`;
+  return `${Math.floor(days / 365)} år siden`;
+}
+
+function isStale(iso: string | null): boolean {
+  if (!iso) return true;
+  return Date.now() - new Date(iso).getTime() > 365 * 24 * 60 * 60 * 1000;
 }
 
 function inventoryClass(n: number): string {
@@ -37,6 +52,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
   const [group, setGroup]           = useState('');
   const [location, setLocation]     = useState('');
   const [hideEmpty, setHideEmpty]   = useState(false);
+  const [hideDead, setHideDead]     = useState(false);
   const [sortField, setSortField]   = useState<SortField>('number');
   const [sortDir, setSortDir]       = useState<SortDir>('asc');
   const [expanded, setExpanded]     = useState<Set<string>>(new Set());
@@ -79,12 +95,13 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
     const q = search.toLowerCase();
     return data.items.filter((item) => {
       if (hideEmpty && item.inventory === 0) return false;
+      if (hideDead && (item.consumption?.last90d ?? 0) === 0) return false;
       if (group && item.inventoryPostingGroupCode !== group) return false;
       if (location && !((item.inventoryByLocation?.[location] ?? 0) > 0)) return false;
       if (q && !item.number.toLowerCase().includes(q) && !item.displayName.toLowerCase().includes(q) && !(item.displayName2 ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data, search, group, location, hideEmpty]);
+  }, [data, search, group, location, hideEmpty, hideDead]);
 
   const qtyFor = (item: BcItem) =>
     location ? (item.inventoryByLocation?.[location] ?? 0) : item.inventory;
@@ -92,9 +109,15 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'number')      cmp = a.number.localeCompare(b.number);
-      if (sortField === 'displayName') cmp = a.displayName.localeCompare(b.displayName);
-      if (sortField === 'inventory')   cmp = qtyFor(a) - qtyFor(b);
+      if (sortField === 'number')         cmp = a.number.localeCompare(b.number);
+      if (sortField === 'displayName')    cmp = a.displayName.localeCompare(b.displayName);
+      if (sortField === 'inventory')      cmp = qtyFor(a) - qtyFor(b);
+      if (sortField === 'consumption90d') cmp = (a.consumption?.last90d ?? 0) - (b.consumption?.last90d ?? 0);
+      if (sortField === 'lastMovement') {
+        const aTime = a.consumption?.lastMovementDate ? new Date(a.consumption.lastMovementDate).getTime() : 0;
+        const bTime = b.consumption?.lastMovementDate ? new Date(b.consumption.lastMovementDate).getTime() : 0;
+        cmp = aTime - bTime;
+      }
       return sortDir === 'asc' ? cmp : -cmp;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,6 +191,14 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
           Skjul tomt lager
         </label>
 
+        <label className={styles.toggleLabel}>
+          <div
+            className={`${styles.toggle} ${hideDead ? styles.toggleActive : ''}`}
+            onClick={() => setHideDead((v) => !v)}
+          />
+          Skjul døde varer (0 forbruk 90d)
+        </label>
+
         <button
           className={styles.refreshBtn}
           onClick={() => refetch()}
@@ -225,6 +256,20 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                   {location ? `LAGER (${location})` : 'LAGER'}{sortIcon('inventory', sortField, sortDir)}
                 </th>
                 <th style={{ textAlign: 'right' }}>I BESTILLING</th>
+                <th
+                  className={styles.sortable}
+                  style={{ textAlign: 'right' }}
+                  onClick={() => toggleSort('consumption90d')}
+                  title="Sum |uttak| siste 90 dager (Sale + Consumption + Negative Adjmt., ekskl. Transfer)"
+                >
+                  FORBRUK 90D{sortIcon('consumption90d', sortField, sortDir)}
+                </th>
+                <th
+                  className={styles.sortable}
+                  onClick={() => toggleSort('lastMovement')}
+                >
+                  SIST BEVEGET{sortIcon('lastMovement', sortField, sortDir)}
+                </th>
                 <th>OPPDATERT</th>
               </tr>
             </thead>
@@ -240,19 +285,17 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                   <Fragment key={item.number}>
                     <tr
                       className={`${styles.row} ${item.inventory === 0 ? styles.rowEmpty : ''}`}
-                      onClick={() => hasLocationData && toggleExpand(item.number)}
-                      style={{ cursor: hasLocationData ? 'pointer' : 'default' }}
+                      onClick={() => toggleExpand(item.number)}
+                      style={{ cursor: 'pointer' }}
                     >
                       <td>
-                        {hasLocationData && (
-                          <button
-                            className={styles.expandToggle}
-                            onClick={(e) => { e.stopPropagation(); toggleExpand(item.number); }}
-                            title={isExpanded ? 'Skjul lokasjoner' : 'Vis lokasjoner'}
-                          >
-                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-                        )}
+                        <button
+                          className={styles.expandToggle}
+                          onClick={(e) => { e.stopPropagation(); toggleExpand(item.number); }}
+                          title={isExpanded ? 'Skjul detaljer' : 'Vis detaljer og bevegelser'}
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
                       </td>
                       <td className={styles.varenr}>{item.number}</td>
                       <td>{item.displayName}</td>
@@ -285,23 +328,43 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
                           );
                         })()}
                       </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span className={(item.consumption?.last90d ?? 0) === 0 ? styles.inventoryDead : ''}>
+                          {item.consumption?.last90d ?? 0}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={isStale(item.consumption?.lastMovementDate ?? null)
+                            ? styles.lastMovementBadgeStale
+                            : styles.lastMovementBadgeOk}
+                          title={item.consumption?.lastMovementDate
+                            ? `Siste bevegelse: ${formatDate(item.consumption.lastMovementDate)}`
+                            : 'Ingen bevegelse siste år'}
+                        >
+                          {formatRelative(item.consumption?.lastMovementDate ?? null)}
+                        </span>
+                      </td>
                       <td className={styles.dateCell}>{formatDate(item.lastModifiedDateTime)}</td>
                     </tr>
-                    {isExpanded && hasLocationData && (
+                    {isExpanded && (
                       <tr className={styles.expandRow}>
                         <td></td>
-                        <td colSpan={7}>
-                          <div className={styles.locationGrid}>
-                            {locationEntries.map(([loc, qty]) => (
-                              <div
-                                key={loc}
-                                className={`${styles.locationChip} ${NEAS_LOCATION_CODES.has(loc) ? styles.locationChipNeas : ''}`}
-                              >
-                                <span className={styles.locationChipCode}>{loc}</span>
-                                <span className={styles.locationChipQty}>{qty}</span>
-                              </div>
-                            ))}
-                          </div>
+                        <td colSpan={9}>
+                          {hasLocationData && (
+                            <div className={styles.locationGrid}>
+                              {locationEntries.map(([loc, qty]) => (
+                                <div
+                                  key={loc}
+                                  className={`${styles.locationChip} ${NEAS_LOCATION_CODES.has(loc) ? styles.locationChipNeas : ''}`}
+                                >
+                                  <span className={styles.locationChipCode}>{loc}</span>
+                                  <span className={styles.locationChipQty}>{qty}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <MovementsList itemNumber={item.number} />
                         </td>
                       </tr>
                     )}
@@ -310,7 +373,7 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
               })}
               {sorted.length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)' }}>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)' }}>
                     Ingen varer matcher søket.
                   </td>
                 </tr>
@@ -321,4 +384,64 @@ export function LagerTab({ initialSearch = '', onGoToBestillinger }: Props) {
       )}
     </div>
   );
+}
+
+function MovementsList({ itemNumber }: { itemNumber: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['bc-item-ledger', itemNumber],
+    queryFn: () => fetchBcItemLedgerEntries(itemNumber),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  if (isLoading) return <div className={styles.movementsLoading}>Laster bevegelser…</div>;
+  if (isError)   return <div className={styles.movementsError}>Kunne ikke laste bevegelser.</div>;
+  const entries = data?.entries ?? [];
+  if (entries.length === 0) return <div className={styles.movementsEmpty}>Ingen bevegelser siste år.</div>;
+
+  return (
+    <table className={styles.movementsTable}>
+      <thead>
+        <tr>
+          <th>Dato</th>
+          <th>Type</th>
+          <th>Dok.nr</th>
+          <th>Lokasjon</th>
+          <th style={{ textAlign: 'right' }}>Antall</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.slice(0, 50).map((e: BcItemLedgerEntry) => (
+          <tr key={e.entryNo}>
+            <td>{formatDate(e.postingDate)}</td>
+            <td><span className={movementBadgeClass(e.entryType)}>{e.entryType}</span></td>
+            <td className={styles.varenr}>{e.documentNumber}</td>
+            <td>{e.locationCode}</td>
+            <td style={{ textAlign: 'right' }} className={e.quantity < 0 ? styles.qtyNeg : styles.qtyPos}>
+              {e.quantity > 0 ? '+' : ''}{e.quantity}
+            </td>
+          </tr>
+        ))}
+        {entries.length > 50 && (
+          <tr>
+            <td colSpan={5} className={styles.movementsEmpty}>
+              Viser 50 av {entries.length} bevegelser
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function movementBadgeClass(entryType: string): string {
+  switch (entryType) {
+    case 'Sale':            return styles.movementBadgeSale;
+    case 'Purchase':        return styles.movementBadgePurchase;
+    case 'Transfer':        return styles.movementBadgeTransfer;
+    case 'Positive Adjmt.': return styles.movementBadgeAdjPos;
+    case 'Negative Adjmt.': return styles.movementBadgeAdjNeg;
+    case 'Consumption':     return styles.movementBadgeSale;
+    case 'Output':          return styles.movementBadgePurchase;
+    default:                return styles.movementBadgeOther;
+  }
 }

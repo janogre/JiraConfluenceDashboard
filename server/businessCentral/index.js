@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getBcItems } from './itemsService.js';
 import { getBcLocations, NEAS_LOCATION_CODES } from './locationsService.js';
 import { getBcPurchaseOrders } from './purchaseOrdersService.js';
+import { getItemConsumption, getItemLedgerEntries } from './itemLedgerEntriesService.js';
 
 const router = Router();
 
@@ -54,6 +55,45 @@ router.get('/purchase-orders', async (req, res) => {
     res.json({ orders, fetchedAt: new Date().toISOString() });
   } catch (err) {
     handleBcError(err, res, '/purchase-orders');
+  }
+});
+
+router.get('/item-consumption', async (req, res) => {
+  const start = Date.now();
+  try {
+    const consumption = await getItemConsumption();
+    console.log(`[BC router] /item-consumption → ${Object.keys(consumption).length} varer, ${Date.now() - start}ms`);
+    res.json({ consumption, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    handleBcError(err, res, '/item-consumption');
+  }
+});
+
+router.get('/item-ledger-entries', async (req, res) => {
+  const start = Date.now();
+  const { itemNumber, fromDate } = req.query;
+  if (!itemNumber || typeof itemNumber !== 'string') {
+    return res.status(400).json({ error: 'Mangler `itemNumber` query-parameter' });
+  }
+  try {
+    const rawEntries = await getItemLedgerEntries(itemNumber, typeof fromDate === 'string' ? fromDate : undefined);
+    const entries = rawEntries.map((r) => ({
+      entryNo: r.Entry_No,
+      itemNumber: r.Item_No,
+      postingDate: r.Posting_Date,
+      entryType: r.Entry_Type,
+      documentNumber: r.Document_No,
+      documentType: r.Document_Type,
+      locationCode: r.Location_Code ?? 'UKJENT',
+      quantity: r.Quantity ?? 0,
+      remainingQuantity: r.Remaining_Quantity ?? 0,
+      description: r.Item_Description ?? '',
+      unitOfMeasureCode: r.Unit_of_Measure_Code ?? '',
+    }));
+    console.log(`[BC router] /item-ledger-entries(${itemNumber}) → ${entries.length} rader, ${Date.now() - start}ms`);
+    res.json({ entries, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    handleBcError(err, res, `/item-ledger-entries(${itemNumber})`);
   }
 });
 

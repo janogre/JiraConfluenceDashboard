@@ -1,5 +1,8 @@
 import { getApi } from './api';
-import type { BcItemsResponse, BcLocationsResponse, BcPurchaseOrdersResponse } from '../types';
+import type {
+  BcItemsResponse, BcLocationsResponse, BcPurchaseOrdersResponse,
+  BcItemLedgerEntriesResponse,
+} from '../types';
 
 export async function fetchBcItems(): Promise<BcItemsResponse> {
   const resp = await getApi().get<BcItemsResponse>('/api/bc/items');
@@ -13,5 +16,17 @@ export async function fetchBcLocations(): Promise<BcLocationsResponse> {
 
 export async function fetchBcPurchaseOrders(): Promise<BcPurchaseOrdersResponse> {
   const resp = await getApi().get<BcPurchaseOrdersResponse>('/api/bc/purchase-orders');
+  return resp.data;
+}
+
+export async function fetchBcItemLedgerEntries(
+  itemNumber: string,
+  fromDate?: string,
+): Promise<BcItemLedgerEntriesResponse> {
+  const params = new URLSearchParams({ itemNumber });
+  if (fromDate) params.set('fromDate', fromDate);
+  const resp = await getApi().get<BcItemLedgerEntriesResponse>(
+    `/api/bc/item-ledger-entries?${params.toString()}`,
+  );
   return resp.data;
 }

@@ -277,6 +277,36 @@ export interface BcItem {
   lastModifiedDateTime: string;
   inventoryByLocation: Record<string, number>;
   openOrders: BcItemOpenOrder[];
+  consumption: BcItemConsumption;
+}
+
+export type BcItemLedgerEntryType =
+  | 'Purchase' | 'Sale' | 'Positive Adjmt.' | 'Negative Adjmt.'
+  | 'Transfer' | 'Consumption' | 'Output';
+
+export interface BcItemLedgerEntry {
+  entryNo: number;
+  itemNumber: string;
+  postingDate: string;
+  entryType: BcItemLedgerEntryType | string;
+  documentNumber: string;
+  documentType: string;
+  locationCode: string;
+  quantity: number;
+  remainingQuantity: number;
+  description: string;
+  unitOfMeasureCode: string;
+}
+
+export interface BcItemConsumption {
+  last30d: number;
+  last90d: number;
+  lastMovementDate: string | null;
+}
+
+export interface BcItemLedgerEntriesResponse {
+  entries: BcItemLedgerEntry[];
+  fetchedAt: string;
 }
 
 export interface BcItemsResponse {

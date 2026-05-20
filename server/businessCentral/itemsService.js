@@ -1,6 +1,7 @@
 import { getBcToken, invalidateBcTokenCache } from './auth.js';
 import { getInventoryByLocation } from './inventoryByLocationService.js';
 import { getOpenOrdersByItem } from './purchaseOrdersService.js';
+import { getItemConsumption } from './itemLedgerEntriesService.js';
 
 function buildOdataFilter() {
   const groups = (process.env.BC_ITEM_GROUPS || 'KOM,DRIFT')
@@ -73,18 +74,38 @@ async function enrichWithOpenOrders(items) {
   }
 }
 
+async function enrichWithConsumption(items) {
+  try {
+    const byItem = await getItemConsumption();
+    return items.map((item) => ({
+      ...item,
+      consumption: byItem[item.number] ?? { last30d: 0, last90d: 0, lastMovementDate: null },
+    }));
+  } catch (err) {
+    console.warn('[BC items] Kunne ikke hente consumption – returnerer uten:', err.message);
+    return items.map((item) => ({
+      ...item,
+      consumption: { last30d: 0, last90d: 0, lastMovementDate: null },
+    }));
+  }
+}
+
 export async function getBcItems() {
   let token = await getBcToken();
   try {
     const items = await fetchAllPages(token);
-    return await enrichWithOpenOrders(await enrichWithInventoryByLocation(items));
+    return await enrichWithConsumption(
+      await enrichWithOpenOrders(await enrichWithInventoryByLocation(items)),
+    );
   } catch (err) {
     if (err.status === 401) {
       console.log('[BC items] 401 mottatt – invaliderer cache og prøver på nytt');
       invalidateBcTokenCache();
       token = await getBcToken();
       const items = await fetchAllPages(token);
-      return await enrichWithOpenOrders(await enrichWithInventoryByLocation(items));
+      return await enrichWithConsumption(
+        await enrichWithOpenOrders(await enrichWithInventoryByLocation(items)),
+      );
     }
     throw err;
   }
