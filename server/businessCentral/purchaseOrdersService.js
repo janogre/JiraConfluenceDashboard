@@ -78,6 +78,68 @@ async function fetchAllPages(token) {
   return orders;
 }
 
+async function fetchAllItemModels(token) {
+  // Henter number + displayName2 for alle varer, slik at vi kan berike
+  // ordrelinjer med "Beskrivelse 2" (modellnummer) som ikke eksponeres
+  // direkte på purchaseOrderLines i BC v2.0 API.
+  const select = 'number,displayName2';
+  const base = `https://api.businesscentral.dynamics.com/v2.0/${process.env.BC_TENANT_ID}/${process.env.BC_ENVIRONMENT}/api/v2.0`;
+  let url =
+    `${base}/companies(${process.env.BC_COMPANY_ID})/items` +
+    `?$select=${select}&$top=1000`;
+
+  const models = new Map();
+  let pageCount = 0;
+
+  while (url) {
+    pageCount++;
+    console.log(`[BC items/models] Henter side ${pageCount}: ${url.substring(0, 120)}…`);
+
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error(`[BC items/models] API-feil ${resp.status}:`, body.substring(0, 300));
+      const err = new Error(`BC API feilet (${resp.status})`);
+      err.status = resp.status;
+      err.body = body;
+      throw err;
+    }
+
+    const data = await resp.json();
+    for (const it of data.value ?? []) {
+      if (it.number) models.set(it.number, it.displayName2 ?? '');
+    }
+    url = data['@odata.nextLink'] ?? null;
+  }
+
+  console.log(`[BC items/models] Totalt ${models.size} varer hentet over ${pageCount} side(r)`);
+  return models;
+}
+
+async function enrichWithDescription2(orders, token) {
+  let models;
+  try {
+    models = await fetchAllItemModels(token);
+  } catch (err) {
+    console.warn('[BC orders] Kunne ikke hente item-modeller – fortsetter uten description2:', err.message);
+    return orders.map((order) => ({
+      ...order,
+      purchaseOrderLines: (order.purchaseOrderLines ?? []).map((line) => ({ ...line, description2: '' })),
+    }));
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    purchaseOrderLines: (order.purchaseOrderLines ?? []).map((line) => ({
+      ...line,
+      description2: models.get(line.lineObjectNumber) ?? '',
+    })),
+  }));
+}
+
 async function enrichWithLocationCodes(orders) {
   const locations = await getBcLocations();
   const locationMap = new Map(locations.map((l) => [l.id, l.code]));
@@ -115,7 +177,9 @@ export async function getBcPurchaseOrders() {
   let token = await getBcToken();
   try {
     const orders = await fetchAllPages(token);
-    const enriched = enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+    const enriched = enrichWithDerivedStatus(
+      await enrichWithDescription2(await enrichWithLocationCodes(orders), token)
+    );
     ordersCache = { data: enriched, expiresAt: Date.now() + CACHE_TTL_MS };
     return enriched;
   } catch (err) {
@@ -124,7 +188,9 @@ export async function getBcPurchaseOrders() {
       invalidateBcTokenCache();
       token = await getBcToken();
       const orders = await fetchAllPages(token);
-      const enriched = enrichWithDerivedStatus(await enrichWithLocationCodes(orders));
+      const enriched = enrichWithDerivedStatus(
+        await enrichWithDescription2(await enrichWithLocationCodes(orders), token)
+      );
       ordersCache = { data: enriched, expiresAt: Date.now() + CACHE_TTL_MS };
       return enriched;
     }

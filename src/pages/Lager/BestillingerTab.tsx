@@ -102,7 +102,9 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
       if (q) {
         const matchOrder = order.number.toLowerCase().includes(q) || order.vendorName.toLowerCase().includes(q);
         const matchLine = order.purchaseOrderLines.some((l) =>
-          l.lineObjectNumber.toLowerCase().includes(q) || l.description.toLowerCase().includes(q)
+          l.lineObjectNumber.toLowerCase().includes(q) ||
+          l.description.toLowerCase().includes(q) ||
+          (l.description2 ?? '').toLowerCase().includes(q)
         );
         if (!matchOrder && !matchLine) return false;
       }
@@ -287,6 +289,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                               <tr>
                                 <th>VARENR</th>
                                 <th>BESKRIVELSE</th>
+                                <th>BESKRIVELSE 2</th>
                                 <th>LOKASJON</th>
                                 <th style={{ textAlign: 'right' }}>BESTILT</th>
                                 <th style={{ textAlign: 'right' }}>MOTTATT</th>
@@ -307,6 +310,7 @@ export function BestillingerTab({ initialSearch = '', onGoToLager }: Props) {
                                     </button>
                                   </td>
                                   <td>{line.description}</td>
+                                  <td>{line.description2}</td>
                                   <td>
                                     <span className={styles.locationBadge}>{line.locationCode}</span>
                                   </td>

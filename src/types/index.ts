@@ -335,6 +335,7 @@ export interface BcLocationsResponse {
 export interface BcPurchaseOrderLine {
   lineObjectNumber: string;
   description: string;
+  description2: string;
   quantity: number;
   receivedQuantity: number;
   invoicedQuantity: number;
