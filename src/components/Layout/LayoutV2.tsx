@@ -22,6 +22,7 @@ import {
   Wand2,
   Users,
   Package,
+  FilePlus,
 } from 'lucide-react';
 import { NetworkLogo } from './NetworkLogo';
 import styles from './LayoutV2.module.css';
@@ -31,6 +32,7 @@ const EXPANDED = 224;
 
 const navItems = [
   { path: '/',                icon: LayoutDashboard, label: 'Dashboard'       },
+  { path: '/ny-sak',         icon: FilePlus,         label: 'Ny sak'          },
   { path: '/project-wizard', icon: Wand2,           label: 'Prosjektwizard'  },
   { path: '/confluence',     icon: FileText,         label: 'Confluence'      },
   { path: '/board',      icon: Kanban,           label: 'Jira Board'     },

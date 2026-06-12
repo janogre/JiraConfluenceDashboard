@@ -601,6 +601,78 @@ Foreslå 3–7 elementer. Skriv på norsk bokmål. Ingen annen tekst – kun JSO
   }
 });
 
+// Klassifiser fritekst til den nye Jira-strukturen (arbeidstype, komponent, kategori,
+// prioritet, etiketter). Brukes av hurtigregistreringen for friksjonsfri utfylling.
+app.post('/api/ai/classify-issue', async (req, res) => {
+  const { apiKey: bodyKey, text, allowed } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Mangler beskrivelse' });
+
+  const a = allowed || {};
+  const arbeidstyper = a.arbeidstyper || [];
+  const prioriteter = a.prioriteter || [];
+  const komponenter = a.komponenter || [];
+  const kategorierPerTeam = a.kategorierPerTeam || {};
+  const etiketter = a.etiketter || [];
+
+  const etikettBeskrivelse = etiketter
+    .map((e) => `  ${e.prefiks}: (${e.formaal}) kjente verdier: ${(e.verdier || []).join(', ') || '–'}`)
+    .join('\n');
+
+  const kategoriBeskrivelse = Object.entries(kategorierPerTeam)
+    .map(([team, vals]) => `  ${team}: ${(vals || []).join(', ')}`)
+    .join('\n');
+
+  const systemPrompt = `Du klassifiserer en kort fritekstbeskrivelse av en arbeidsoppgave inn i en fast Jira-struktur for et bredbånds-/telekom-nettverk.
+Returner KUN et gyldig JSON-objekt – ingen forklaring, ingen markdown-blokk.
+
+JSON-form:
+{
+  "summary": "kort, presis sakstittel på norsk (maks ca. 80 tegn)",
+  "arbeidstype": "<en av: ${arbeidstyper.join(', ')}> eller null",
+  "komponent": "<en av: ${komponenter.join(', ')}> eller null",
+  "kategori": "<gyldig Team:Kategori-verdi> eller null",
+  "prioritet": "<en av: ${prioriteter.join(', ')}> eller null",
+  "etiketter": ["prefiks:verdi", ...] eller [],
+  "underoppgaver": ["kort tittel på utførelsessteg", ...] eller [],
+  "begrunnelse": "kort begrunnelse på norsk, én setning"
+}
+
+Regler:
+- Bruk KUN verdier fra listene over. Er du usikker på et felt, sett det til null (ikke gjett).
+- Kategori velges ut fra komponentens team:
+${kategoriBeskrivelse}
+  (Aksess og Kjerne hører til team "nettverk"; System hører til team "system".)
+- Etiketter er valgfrie og MÅ ha prefiks. Tillatte prefikser:
+${etikettBeskrivelse}
+- Etikettverdier: kun små bokstaver, ingen mellomrom (bruk bindestrek), og forenkle norske tegn (ø→o, å→a, æ→e). Eksempel: "Smøla" → "geo:smola".
+- Ikke lag etiketter uten prefiks, og foreslå kun etiketter du er rimelig sikker på.
+- Arbeidstype: noe som er ødelagt/feiler → "Feil"; konkret planlagt arbeid → "Oppgave"; behov eller ønske → "Historie".
+- Underoppgaver: hvis saken naturlig består av flere konkrete utførelsessteg (typisk installasjon/oppsett med flere ledd), del den opp i korte underoppgave-titler (3–8 stk) i "underoppgaver". Hver tittel skal være ett tydelig steg. Er saken én enkel handling, returner tom liste.`;
+
+  const userMessage = `Beskrivelse:\n${text}\n\nReturner KUN JSON.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 900, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
+
+    const textOut = data.content?.[0]?.text ?? '';
+    const cleaned = textOut.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    let result;
+    try { result = JSON.parse(cleaned); }
+    catch { return res.status(500).json({ error: 'Kunne ikke tolke AI-svar som JSON', raw: textOut.substring(0, 500) }); }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================

@@ -12,6 +12,7 @@ import { Digest } from './pages/Digest/Digest';
 import { TeamCalendar } from './pages/Calendar/Calendar';
 import { MyMetrics } from './pages/MyMetrics/MyMetrics';
 import { ProjectWizard } from './pages/ProjectWizard/ProjectWizard';
+import { NySak } from './pages/NySak/NySak';
 import { Team } from './pages/Team/Team';
 import { Lager } from './pages/Lager/Lager';
 import { Login } from './pages/Login/Login';
@@ -54,6 +55,7 @@ function App() {
           {authenticated ? (
             <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />
+              <Route path="ny-sak" element={<NySak />} />
               <Route path="confluence" element={<Confluence />} />
               <Route path="board" element={<Board />} />
               <Route path="settings" element={<Settings />} />
