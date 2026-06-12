@@ -209,6 +209,136 @@ export function harGyldigPrefiks(etikett: string): boolean {
   return ETIKETT_PREFIKS_NAVN.includes(etikett.slice(0, idx));
 }
 
+// ── Kravnivå: obligatoriske felt per sak ─────────────────────────────────────
+
+export type Kravnivaa = 'av' | 'mild' | 'standard' | 'streng';
+
+export const KRAVNIVAAER: { id: Kravnivaa; navn: string; beskrivelse: string }[] = [
+  { id: 'av', navn: 'Av', beskrivelse: 'Kun Jira-minimum (tittel + prosjekt). Ingen ekstra krav.' },
+  { id: 'mild', navn: 'Mild', beskrivelse: 'Krev Komponent og Kategori.' },
+  { id: 'standard', navn: 'Standard', beskrivelse: 'Komponent, Kategori, beskrivelse for Feil, og geo-etikett for nettverkssaker.' },
+  { id: 'streng', navn: 'Streng', beskrivelse: 'Som standard, men beskrivelse alltid, og lok/seg der det er relevant.' },
+];
+
+export const KRAVNIVAA_STANDARD: Kravnivaa = 'standard';
+
+const KRAVNIVAA_RANG: Record<Kravnivaa, number> = { av: 0, mild: 1, standard: 2, streng: 3 };
+
+export interface KravKontekst {
+  arbeidstype: string;
+  komponent: string;
+  kategori: string;
+  beskrivelse: string;
+  etiketter: string[];
+}
+
+export interface Krav {
+  id: string;
+  /** Hvilket felt/seksjon i UI kravet peker på (for highlighting og fokus). */
+  felt: 'komponent' | 'kategori' | 'beskrivelse' | 'etiketter';
+  /** Prefiks dersom kravet gjelder en bestemt etikett (geo/lok/seg). */
+  etikettPrefiks?: string;
+  label: string;
+  /** Standard oppfølgingsspørsmål (brukes hvis AI ikke gir et mer presist). */
+  sporsmal: string;
+  minNivaa: number;
+  gjelder: (k: KravKontekst) => boolean;
+  oppfylt: (k: KravKontekst) => boolean;
+}
+
+function harEtikett(etiketter: string[], prefiks: string): boolean {
+  return etiketter.some((e) => e.startsWith(`${prefiks}:`));
+}
+
+function harTeam(komponentNavn: string, team: Team): boolean {
+  const k = finnKomponent(komponentNavn);
+  return !!k && k.team === team;
+}
+
+export const KRAV: Krav[] = [
+  {
+    id: 'komponent', felt: 'komponent', label: 'Komponent',
+    sporsmal: 'Hvilken del av nettet/systemet gjelder saken? (f.eks. Aksess:PON)',
+    minNivaa: KRAVNIVAA_RANG.mild,
+    gjelder: () => true,
+    oppfylt: (k) => !!k.komponent,
+  },
+  {
+    id: 'kategori', felt: 'kategori', label: 'Kategori',
+    sporsmal: 'Hva slags arbeid eller hvilket objekt gjelder saken?',
+    minNivaa: KRAVNIVAA_RANG.mild,
+    gjelder: () => true,
+    oppfylt: (k) => !!k.kategori,
+  },
+  {
+    id: 'beskrivelse-feil', felt: 'beskrivelse', label: 'Beskrivelse',
+    sporsmal: 'Hva er galt, og hva er konsekvensen? Beskriv symptom og omfang.',
+    minNivaa: KRAVNIVAA_RANG.standard,
+    gjelder: (k) => k.arbeidstype === 'Feil',
+    oppfylt: (k) => k.beskrivelse.trim().length > 0,
+  },
+  {
+    id: 'geo-nettverk', felt: 'etiketter', etikettPrefiks: 'geo', label: 'Etikett geo: (kommune)',
+    sporsmal: 'Hvilken kommune eller område gjelder saken? (f.eks. geo:smola)',
+    minNivaa: KRAVNIVAA_RANG.standard,
+    gjelder: (k) => harTeam(k.komponent, 'nettverk'),
+    oppfylt: (k) => harEtikett(k.etiketter, 'geo'),
+  },
+  {
+    id: 'beskrivelse-alle', felt: 'beskrivelse', label: 'Beskrivelse',
+    sporsmal: 'Beskriv saken kort.',
+    minNivaa: KRAVNIVAA_RANG.streng,
+    gjelder: () => true,
+    oppfylt: (k) => k.beskrivelse.trim().length > 0,
+  },
+  {
+    id: 'lok-nettverk', felt: 'etiketter', etikettPrefiks: 'lok', label: 'Etikett lok: (lokasjon)',
+    sporsmal: 'Hvilken node, sentral eller lokasjon? (f.eks. lok:nordvika)',
+    minNivaa: KRAVNIVAA_RANG.streng,
+    gjelder: (k) => harTeam(k.komponent, 'nettverk'),
+    oppfylt: (k) => harEtikett(k.etiketter, 'lok'),
+  },
+  {
+    id: 'seg-system', felt: 'etiketter', etikettPrefiks: 'seg', label: 'Etikett seg: (segment)',
+    sporsmal: 'Hvilket kundesegment gjelder saken? (f.eks. seg:bedrift)',
+    minNivaa: KRAVNIVAA_RANG.streng,
+    gjelder: (k) => harTeam(k.komponent, 'system'),
+    oppfylt: (k) => harEtikett(k.etiketter, 'seg'),
+  },
+];
+
+/** Manglende obligatoriske krav gitt kontekst og aktivt kravnivå (deduplisert per felt). */
+export function manglendeKrav(kontekst: KravKontekst, nivaa: Kravnivaa): Krav[] {
+  const rang = KRAVNIVAA_RANG[nivaa];
+  const sett = new Set<string>();
+  const resultat: Krav[] = [];
+  for (const krav of KRAV) {
+    if (krav.minNivaa > rang) continue;
+    if (!krav.gjelder(kontekst)) continue;
+    if (krav.oppfylt(kontekst)) continue;
+    const nokkel = `${krav.felt}:${krav.etikettPrefiks ?? ''}`;
+    if (sett.has(nokkel)) continue;
+    sett.add(nokkel);
+    resultat.push(krav);
+  }
+  return resultat;
+}
+
+// Persistens av valgt kravnivå (kan flyttes til Innstillinger-UI).
+const KRAVNIVAA_KEY = 'nysak-kravnivaa';
+
+export function lagretKravnivaa(): Kravnivaa {
+  try {
+    const v = localStorage.getItem(KRAVNIVAA_KEY) as Kravnivaa | null;
+    if (v && v in KRAVNIVAA_RANG) return v;
+  } catch { /* ignore */ }
+  return KRAVNIVAA_STANDARD;
+}
+
+export function lagreKravnivaa(nivaa: Kravnivaa): void {
+  try { localStorage.setItem(KRAVNIVAA_KEY, nivaa); } catch { /* ignore */ }
+}
+
 // ── Samlet «allowed»-pakke til AI-klassifisering ──────────────────────────────
 
 /**
