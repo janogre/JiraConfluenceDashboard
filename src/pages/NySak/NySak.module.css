@@ -474,6 +474,81 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── Obligatoriske krav / mangler ── */
+
+.manglerPanel {
+  border: 1px solid rgba(255, 166, 90, 0.6);
+  background: rgba(255, 166, 90, 0.12);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.manglerHode {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.manglerHode svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+.manglerNivaa {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.manglerListe {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 22px;
+}
+
+.manglerHopp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.manglerHopp:hover {
+  background: rgba(30, 122, 74, 0.08);
+  text-decoration: underline;
+}
+
+.feltMangler {
+  border-color: var(--color-warning) !important;
+  box-shadow: 0 0 0 3px rgba(255, 166, 90, 0.18);
+}
+
+.feltSporsmal {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.feltSporsmal svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
 /* ── Suksess ── */
 
 .suksess {

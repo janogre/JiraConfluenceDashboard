@@ -636,6 +636,7 @@ JSON-form:
   "prioritet": "<en av: ${prioriteter.join(', ')}> eller null",
   "etiketter": ["prefiks:verdi", ...] eller [],
   "underoppgaver": ["kort tittel på utførelsessteg", ...] eller [],
+  "oppfolging": { "felt": "kort spørsmål for å skaffe manglende obligatorisk info" } eller {},
   "begrunnelse": "kort begrunnelse på norsk, én setning"
 }
 
@@ -649,7 +650,8 @@ ${etikettBeskrivelse}
 - Etikettverdier: kun små bokstaver, ingen mellomrom (bruk bindestrek), og forenkle norske tegn (ø→o, å→a, æ→e). Eksempel: "Smøla" → "geo:smola".
 - Ikke lag etiketter uten prefiks, og foreslå kun etiketter du er rimelig sikker på.
 - Arbeidstype: noe som er ødelagt/feiler → "Feil"; konkret planlagt arbeid → "Oppgave"; behov eller ønske → "Historie".
-- Underoppgaver: hvis saken naturlig består av flere konkrete utførelsessteg (typisk installasjon/oppsett med flere ledd), del den opp i korte underoppgave-titler (3–8 stk) i "underoppgaver". Hver tittel skal være ett tydelig steg. Er saken én enkel handling, returner tom liste.`;
+- Underoppgaver: hvis saken naturlig består av flere konkrete utførelsessteg (typisk installasjon/oppsett med flere ledd), del den opp i korte underoppgave-titler (3–8 stk) i "underoppgaver". Hver tittel skal være ett tydelig steg. Er saken én enkel handling, returner tom liste.
+- Oppfolging: for hvert obligatorisk felt du IKKE klarte å fylle sikkert (komponent, kategori, beskrivelse, eller etikettene geo/lok/seg), lag ett kort og konkret spørsmål som hjelper den ansatte å oppgi nettopp den informasjonen. Bruk feltnavnet som nøkkel (komponent, kategori, beskrivelse, geo, lok, seg). Spør gjerne basert på det du allerede vet (f.eks. «Er feilen på PON eller BNG?»). Returner tomt objekt {} dersom du fylte alt.`;
 
   const userMessage = `Beskrivelse:\n${text}\n\nReturner KUN JSON.`;
 
@@ -657,7 +659,7 @@ ${etikettBeskrivelse}
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 900, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: systemPrompt, messages: [{ role: 'user', content: userMessage }] }),
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });

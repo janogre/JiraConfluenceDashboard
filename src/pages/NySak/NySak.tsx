@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, Plus, X, Check, ExternalLink, Loader2, Info, ListTree } from 'lucide-react';
+import { Sparkles, Plus, X, Check, ExternalLink, Loader2, Info, ListTree, AlertCircle, HelpCircle } from 'lucide-react';
 import { getProjects, getCurrentUser, searchJiraUsers, createIssue } from '../../services/jiraService';
 import { getAnthropicKey } from '../../services/api';
 import { Button } from '../../components/common';
@@ -13,6 +13,8 @@ import {
   kategorierForKomponent, alleKategorier,
   ETIKETT_PREFIKSER, byggEtikett,
   byggTillatteVerdier,
+  manglendeKrav, lagretKravnivaa, KRAVNIVAAER,
+  type Krav, type KravKontekst,
 } from '../../config/jiraStructure';
 import styles from './NySak.module.css';
 
@@ -37,6 +39,7 @@ interface ForslagSvar {
   prioritet?: string | null;
   etiketter?: unknown;
   underoppgaver?: unknown;
+  oppfolging?: unknown;
   begrunnelse?: string;
 }
 
@@ -175,6 +178,15 @@ export function NySak() {
   const [opprettStatus, setOpprettStatus] = useState('');
   const [created, setCreated] = useState<OpprettetSak | null>(null);
 
+  const [kravnivaa] = useState(lagretKravnivaa);
+  const [visMangler, setVisMangler] = useState(false);
+  const [aiOppfolging, setAiOppfolging] = useState<Record<string, string>>({});
+
+  const fritekstRef = useRef<HTMLTextAreaElement>(null);
+  const komponentRef = useRef<HTMLSelectElement>(null);
+  const kategoriRef = useRef<HTMLSelectElement>(null);
+  const etikettRef = useRef<HTMLDivElement>(null);
+
   const nesteUId = useRef(0);
   function nyUId() {
     nesteUId.current += 1;
@@ -199,6 +211,37 @@ export function NySak() {
   }, [meg, assignee.accountId]);
 
   const kategoriValg = komponent ? kategorierForKomponent(komponent).map((k) => k.full) : alleKategorier();
+
+  // Obligatoriske krav gitt aktivt kravnivå og dagens utfylling.
+  const kontekst: KravKontekst = { arbeidstype, komponent, kategori, beskrivelse: fritekst, etiketter };
+  const manglende = manglendeKrav(kontekst, kravnivaa);
+  const mangelFelt = new Set(manglende.map((k) => (k.etikettPrefiks ? `etikett:${k.etikettPrefiks}` : k.felt)));
+  const harMangel = (n: string) => visMangler && mangelFelt.has(n);
+
+  function sporsmalFor(k: Krav): string {
+    return aiOppfolging[k.etikettPrefiks ?? k.felt] || k.sporsmal;
+  }
+
+  function fokusKrav(k: Krav): void {
+    const ref =
+      k.felt === 'komponent' ? komponentRef
+      : k.felt === 'kategori' ? kategoriRef
+      : k.felt === 'beskrivelse' ? fritekstRef
+      : etikettRef;
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const el = ref.current;
+    if (el && 'focus' in el) (el as HTMLElement).focus();
+  }
+
+  // Inline oppfølgingsspørsmål under et felt som mangler.
+  function feltSporsmal(n: string) {
+    if (!visMangler) return null;
+    const k = manglende.find((x) => (x.etikettPrefiks ? `etikett:${x.etikettPrefiks}` : x.felt) === n);
+    if (!k) return null;
+    return (
+      <p className={styles.feltSporsmal}><HelpCircle size={12} /> {sporsmalFor(k)}</p>
+    );
+  }
 
   function velgKomponent(navn: string) {
     setKomponent(navn);
@@ -294,6 +337,10 @@ export function NySak() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI-feil');
       brukForslag(data as ForslagSvar);
+      const o = (data as ForslagSvar).oppfolging;
+      setAiOppfolging(o && typeof o === 'object' && !Array.isArray(o) ? (o as Record<string, string>) : {});
+      // Synliggjør straks hva som fortsatt mangler (AI som setter felt til null → spør).
+      setVisMangler(true);
     } catch (err) {
       setClassifyError(err instanceof Error ? err.message : 'Ukjent feil');
     } finally {
@@ -308,6 +355,13 @@ export function NySak() {
     }
     if (!jiraProjectKey) {
       setCreateError('Velg et Jira-prosjekt.');
+      return;
+    }
+    if (manglende.length > 0) {
+      // Obligatoriske punkter mangler — spør etter dem i stedet for å opprette.
+      setVisMangler(true);
+      setCreateError('');
+      fokusKrav(manglende[0]);
       return;
     }
     setCreating(true);
@@ -361,6 +415,8 @@ export function NySak() {
     setCreated(null);
     setCreateError('');
     setClassifyError('');
+    setVisMangler(false);
+    setAiOppfolging({});
     // Beholder jiraProjectKey og assignee bevisst for rask gjentatt registrering.
   }
 
@@ -408,17 +464,40 @@ export function NySak() {
         </p>
       </div>
 
+      {visMangler && manglende.length > 0 && (
+        <div className={styles.manglerPanel}>
+          <div className={styles.manglerHode}>
+            <AlertCircle size={16} />
+            <span>
+              Noen obligatoriske punkter mangler før saken kan opprettes
+              <span className={styles.manglerNivaa}> · {KRAVNIVAAER.find((n) => n.id === kravnivaa)?.navn}-nivå</span>
+            </span>
+          </div>
+          <ul className={styles.manglerListe}>
+            {manglende.map((k) => (
+              <li key={k.id}>
+                <button type="button" className={styles.manglerHopp} onClick={() => fokusKrav(k)}>
+                  <HelpCircle size={14} /> {sporsmalFor(k)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className={styles.grid}>
         {/* ── Venstre: beskrivelse + AI ── */}
         <div className={styles.kort}>
           <label className={styles.label}>Hva gjelder saken?</label>
           <textarea
-            className={styles.fritekst}
+            ref={fritekstRef}
+            className={`${styles.fritekst} ${harMangel('beskrivelse') ? styles.feltMangler : ''}`}
             value={fritekst}
             onChange={(e) => setFritekst(e.target.value)}
             placeholder="F.eks. «Feil på OLT i Nordvika, Smøla – ingen kunder får signal»"
             rows={6}
           />
+          {feltSporsmal('beskrivelse')}
           <Button
             variant="primary"
             icon={classifying ? <Loader2 size={16} className={styles.spin} /> : <Sparkles size={16} />}
@@ -483,7 +562,12 @@ export function NySak() {
           <div className={styles.fieldRow}>
             <div className={styles.field}>
               <label className={styles.label}>Komponent</label>
-              <select className={styles.select} value={komponent} onChange={(e) => velgKomponent(e.target.value)}>
+              <select
+                ref={komponentRef}
+                className={`${styles.select} ${harMangel('komponent') ? styles.feltMangler : ''}`}
+                value={komponent}
+                onChange={(e) => velgKomponent(e.target.value)}
+              >
                 <option value="">— Velg komponent —</option>
                 {komponenterGruppert().map((g) => (
                   <optgroup key={g.gruppe} label={g.gruppe}>
@@ -493,23 +577,33 @@ export function NySak() {
                   </optgroup>
                 ))}
               </select>
+              {feltSporsmal('komponent')}
             </div>
             <div className={styles.field}>
               <label className={styles.label}>
                 Kategori {komponent && <span className={styles.scopeHint}>({finnKomponent(komponent)?.team})</span>}
               </label>
-              <select className={styles.select} value={kategori} onChange={(e) => setKategori(e.target.value)}>
+              <select
+                ref={kategoriRef}
+                className={`${styles.select} ${harMangel('kategori') ? styles.feltMangler : ''}`}
+                value={kategori}
+                onChange={(e) => setKategori(e.target.value)}
+              >
                 <option value="">— Velg kategori —</option>
                 {kategoriValg.map((k) => (
                   <option key={k} value={k}>{k}</option>
                 ))}
               </select>
+              {feltSporsmal('kategori')}
             </div>
           </div>
 
           {/* ── Etiketter ── */}
-          <div className={styles.field}>
+          <div className={styles.field} ref={etikettRef}>
             <label className={styles.label}>Etiketter <span className={styles.valgfri}>(valgfritt)</span></label>
+            {feltSporsmal('etikett:geo')}
+            {feltSporsmal('etikett:lok')}
+            {feltSporsmal('etikett:seg')}
             {etiketter.length > 0 && (
               <div className={styles.valgteEtiketter}>
                 {etiketter.map((e) => (

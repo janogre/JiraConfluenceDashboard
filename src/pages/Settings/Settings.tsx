@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import { getAllProjectComponents } from '../../services/jiraService';
 import { loadTeamConfig, saveTeamConfig, TEAM_NAMES } from '../../store/teamStore';
 import type { TeamConfig, TeamName } from '../../store/teamStore';
+import { lagretKravnivaa, lagreKravnivaa, KRAVNIVAAER, type Kravnivaa } from '../../config/jiraStructure';
 import type { ApiConfig } from '../../types';
 import styles from './Settings.module.css';
 
@@ -55,6 +56,16 @@ export function Settings() {
   const [teamSaved, setTeamSaved] = useState(false);
   const [componentSearch, setComponentSearch] = useState<Partial<Record<TeamName, string>>>({});
   const [openDropdown, setOpenDropdown] = useState<TeamName | null>(null);
+
+  const [kravnivaa, setKravnivaa] = useState<Kravnivaa>(lagretKravnivaa);
+  const [kravnivaaSaved, setKravnivaaSaved] = useState(false);
+
+  const handleKravnivaaChange = (n: Kravnivaa) => {
+    setKravnivaa(n);
+    lagreKravnivaa(n);
+    setKravnivaaSaved(true);
+    setTimeout(() => setKravnivaaSaved(false), 2000);
+  };
 
   const { data: allComponents = [] } = useQuery({
     queryKey: ['allProjectComponents'],
@@ -243,6 +254,41 @@ export function Settings() {
           </div>
 
           <Button onClick={handleSaveTeamConfig} icon={<Save size={16} />}>Lagre team-oppsett</Button>
+        </CardContent>
+      </Card>
+
+      {/* ── Saksregistrering ──────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <h2>Saksregistrering</h2>
+        </CardHeader>
+        <CardContent>
+          {kravnivaaSaved && (
+            <div className={styles.statusSaved}>
+              <Check size={16} />
+              <span>Kravnivå lagret!</span>
+            </div>
+          )}
+          <div className={styles.form}>
+            <div>
+              <label className={styles.fieldLabel}>Obligatoriske felt ved hurtigregistrering (kravnivå)</label>
+              <select
+                className={styles.select}
+                value={kravnivaa}
+                onChange={(e) => handleKravnivaaChange(e.target.value as Kravnivaa)}
+              >
+                {KRAVNIVAAER.map((n) => (
+                  <option key={n.id} value={n.id}>{n.navn}</option>
+                ))}
+              </select>
+              <p style={{ marginTop: 8, color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+                {KRAVNIVAAER.find((n) => n.id === kravnivaa)?.beskrivelse}
+              </p>
+              <p style={{ marginTop: 4, color: 'var(--color-text-muted)', fontSize: 'var(--font-size-xs)' }}>
+                Styrer hvilke felt som må fylles på <strong>/ny-sak</strong> før en sak kan opprettes. Mangler noe, blir du spurt med målrettede spørsmål.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
