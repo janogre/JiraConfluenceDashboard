@@ -1,4 +1,5 @@
 import { getApi, getJiraBaseUrl } from './api';
+import { normaliserEtikettVerdi } from '../config/jiraStructure';
 import type { JiraProject, JiraIssue, JiraIssueLink, JiraSubtask, JiraStatus, JiraComment, JiraWorklog, JiraFilter, JiraUser, JiraSprint } from '../types';
 
 // Atlassian Document Format type
@@ -126,6 +127,7 @@ let _categoryFieldKey: string | null | undefined = undefined;
 export function resetFieldDiscoveryCache(): void {
   _startDateFieldKeys = undefined;
   _categoryFieldKey = undefined;
+  _createMetaCache.clear();
 }
 
 async function discoverCustomFields(): Promise<void> {
@@ -720,16 +722,128 @@ export async function searchJiraUsers(query: string): Promise<JiraUser[]> {
     }));
 }
 
+// ── Opprett-metadata (createmeta) for robust feltsetting ──────────────────────
+
+export interface OpprettFelter {
+  /** True hvis createmeta-kallet lyktes. Ved false er feltstøtte ukjent. */
+  metaOk: boolean;
+  støtterPrioritet: boolean;
+  prioriteter: { id: string; name: string }[];
+  komponenter: { id: string; name: string }[];
+  kategoriFieldId: string | null;
+  kategoriSchemaType: string | null;
+  kategoriAllowed: string[] | null;
+  støtterEtiketter: boolean;
+}
+
+const _createMetaCache = new Map<string, OpprettFelter>();
+
+export function resetCreateMetaCache(): void {
+  _createMetaCache.clear();
+}
+
+/**
+ * Hent hvilke strukturfelt som faktisk kan settes på et gitt prosjekt + arbeidstype,
+ * via Jira createmeta. Brukes til å sette ekte felt der de finnes, og falle tilbake
+ * til etiketter ellers. Resultatet caches per (prosjekt, arbeidstype).
+ */
+export async function getOpprettFelter(projectKey: string, issueTypeName: string): Promise<OpprettFelter> {
+  const cacheKey = `${projectKey}::${issueTypeName}`;
+  const cached = _createMetaCache.get(cacheKey);
+  if (cached) return cached;
+
+  await discoverCustomFields();
+
+  const fallback: OpprettFelter = {
+    metaOk: false,
+    støtterPrioritet: false,
+    prioriteter: [],
+    komponenter: [],
+    kategoriFieldId: _categoryFieldKey ?? null,
+    kategoriSchemaType: null,
+    kategoriAllowed: null,
+    støtterEtiketter: true,
+  };
+
+  try {
+    const api = getApi();
+    const baseUrl = getJiraBaseUrl();
+    const response = await api.get<{
+      projects?: Array<{
+        key: string;
+        issuetypes?: Array<{
+          name: string;
+          fields?: Record<string, {
+            name?: string;
+            schema?: { type?: string; items?: string };
+            allowedValues?: Array<{ id?: string; name?: string; value?: string }>;
+          }>;
+        }>;
+      }>;
+    }>(`${baseUrl}/rest/api/3/issue/createmeta`, {
+      params: { projectKeys: projectKey, issuetypeNames: issueTypeName, expand: 'projects.issuetypes.fields' },
+    });
+
+    const fields = response.data.projects?.[0]?.issuetypes?.[0]?.fields;
+    if (!fields) {
+      _createMetaCache.set(cacheKey, fallback);
+      return fallback;
+    }
+
+    const result: OpprettFelter = {
+      metaOk: true,
+      støtterPrioritet: !!fields.priority,
+      prioriteter: (fields.priority?.allowedValues ?? []).map((v) => ({ id: v.id ?? '', name: v.name ?? '' })),
+      komponenter: (fields.components?.allowedValues ?? []).map((v) => ({ id: v.id ?? '', name: v.name ?? '' })),
+      kategoriFieldId: null,
+      kategoriSchemaType: null,
+      kategoriAllowed: null,
+      støtterEtiketter: !!fields.labels,
+    };
+
+    // Finn Kategori-feltet: foretrekk oppdaget felt-id, ellers et felt med navn «kategori».
+    let katId: string | null = null;
+    if (_categoryFieldKey && fields[_categoryFieldKey]) {
+      katId = _categoryFieldKey;
+    } else {
+      const entry = Object.entries(fields).find(([, def]) =>
+        ['kategori', 'category'].includes((def.name ?? '').toLowerCase())
+      );
+      if (entry) katId = entry[0];
+    }
+    if (katId) {
+      const def = fields[katId];
+      result.kategoriFieldId = katId;
+      result.kategoriSchemaType = def.schema?.type ?? null;
+      if (def.allowedValues?.length) {
+        result.kategoriAllowed = def.allowedValues.map((v) => v.value ?? v.name ?? '').filter(Boolean);
+      }
+    }
+
+    _createMetaCache.set(cacheKey, result);
+    return result;
+  } catch {
+    _createMetaCache.set(cacheKey, fallback);
+    return fallback;
+  }
+}
+
+export interface CreateIssueOptions {
+  description?: string;
+  dueDate?: string;
+  parentKey?: string;
+  assigneeAccountId?: string;
+  priority?: string;        // prioritetsnavn, f.eks. "Medium"
+  components?: string[];     // komponentnavn (Gruppe:Element)
+  labels?: string[];         // ferdige etiketter (prefiks:verdi)
+  kategori?: string;         // Team:Kategori, f.eks. "nettverk:feilretting"
+}
+
 export async function createIssue(
   projectKey: string,
   summary: string,
   issueTypeName: string,
-  options?: {
-    description?: string;
-    dueDate?: string;
-    parentKey?: string;
-    assigneeAccountId?: string;
-  }
+  options?: CreateIssueOptions
 ): Promise<{ id: string; key: string; url: string }> {
   const api = getApi();
   const baseUrl = getJiraBaseUrl();
@@ -748,16 +862,60 @@ export async function createIssue(
     };
   }
 
-  if (options?.dueDate) {
-    fields.duedate = options.dueDate;
-  }
+  if (options?.dueDate) fields.duedate = options.dueDate;
+  if (options?.parentKey) fields.parent = { key: options.parentKey };
+  if (options?.assigneeAccountId) fields.assignee = { accountId: options.assigneeAccountId };
 
-  if (options?.parentKey) {
-    fields.parent = { key: options.parentKey };
-  }
+  // Strukturfelt (prioritet, komponent, kategori, etiketter) settes robust:
+  // ekte Jira-felt der de finnes, ellers som etikett-fallback slik at ingenting går tapt
+  // og oppretting aldri feiler på ukjente felt.
+  const ønskerStruktur =
+    !!options?.priority || !!options?.components?.length || !!options?.labels?.length || !!options?.kategori;
 
-  if (options?.assigneeAccountId) {
-    fields.assignee = { accountId: options.assigneeAccountId };
+  if (ønskerStruktur) {
+    const meta = await getOpprettFelter(projectKey, issueTypeName);
+    const labels: string[] = [...(options?.labels ?? [])];
+
+    // Prioritet
+    const pri = options?.priority;
+    if (pri) {
+      if (!meta.metaOk) {
+        fields.priority = { name: pri };
+      } else if (meta.støtterPrioritet) {
+        const match = meta.prioriteter.find((p) => p.name.toLowerCase() === pri.toLowerCase());
+        if (match) fields.priority = { id: match.id };
+        else if (meta.prioriteter.length === 0) fields.priority = { name: pri };
+      }
+    }
+
+    // Komponent → ekte komponent hvis den finnes i prosjektet, ellers etikett komp:<verdi>
+    const comps = options?.components ?? [];
+    if (comps.length) {
+      const componentsPayload: { id: string }[] = [];
+      for (const navn of comps) {
+        const match = meta.komponenter.find((c) => c.name.toLowerCase() === navn.toLowerCase());
+        if (match) componentsPayload.push({ id: match.id });
+        else labels.push(`komp:${normaliserEtikettVerdi(navn.replace(/:/g, '-'))}`);
+      }
+      if (componentsPayload.length) fields.components = componentsPayload;
+    }
+
+    // Kategori → ekte felt hvis oppdaget, ellers etikett kat:<verdi>
+    const kat = options?.kategori;
+    if (kat) {
+      const katEtikett = `kat:${normaliserEtikettVerdi(kat.replace(/:/g, '-'))}`;
+      if (meta.kategoriFieldId) {
+        const verdi = byggKategoriFeltVerdi(meta, kat);
+        if (verdi !== null) fields[meta.kategoriFieldId] = verdi;
+        else labels.push(katEtikett);
+      } else {
+        labels.push(katEtikett);
+      }
+    }
+
+    // Etiketter (inkl. fallback-etiketter), deduplisert og uten tomme.
+    const reneEtiketter = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
+    if (reneEtiketter.length) fields.labels = reneEtiketter;
   }
 
   const response = await api.post<{ id: string; key: string }>(
@@ -767,6 +925,23 @@ export async function createIssue(
 
   const { id, key } = response.data;
   return { id, key, url: `${baseUrl}/browse/${key}` };
+}
+
+/**
+ * Bygg verdien for Kategori-feltet basert på felttypen i createmeta.
+ * Returnerer null dersom verdien ikke passer (→ kaller faller tilbake til etikett).
+ */
+function byggKategoriFeltVerdi(meta: OpprettFelter, kategori: string): unknown {
+  const type = meta.kategoriSchemaType;
+  const allowed = meta.kategoriAllowed;
+  const erTillatt = !allowed || allowed.some((a) => a.toLowerCase() === kategori.toLowerCase());
+
+  if (type === 'option') return erTillatt ? { value: kategori } : null;
+  // Multi-select (array av option): kun sett dersom feltet har en allowed-liste og verdien finnes der.
+  // For array uten allowed-liste (kan være et labels-felt med ukjent form) faller vi tilbake til etikett.
+  if (type === 'array') return allowed && erTillatt ? [{ value: kategori }] : null;
+  // Fritekstfelt eller ukjent type: sett som streng dersom verdien er tillatt.
+  return erTillatt ? kategori : null;
 }
 
 export async function createRemoteLink(
