@@ -675,6 +675,45 @@ ${etikettBeskrivelse}
   }
 });
 
+// Skriv om / strukturer en uferdig sakbeskrivelse til en ryddig Jira-beskrivelse.
+// Valgfritt steg i hurtigregistreringen — kjøres kun når brukeren ber om det.
+app.post('/api/ai/rewrite-description', async (req, res) => {
+  const { apiKey: bodyKey, text, arbeidstype } = req.body;
+  const apiKey = bodyKey || req.session.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'Mangler Anthropic API-nøkkel' });
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Mangler beskrivelse' });
+
+  const erFeil = String(arbeidstype || '').toLowerCase() === 'feil';
+  const struktur = erFeil
+    ? `Strukturer som korte avsnitt med disse ledetekstene, hver på egen linje (ingen markdown):
+Symptom: <hva som observeres>
+Konsekvens: <hvem eller hva som påvirkes>
+Antatt årsak: <ta kun med denne linjen hvis det fremgår av teksten>`
+    : `Skriv ett til tre korte, klare avsnitt i saklig, profesjonell form.`;
+
+  const systemPrompt = `Du er en teknisk skribent for et bredbånds-/telekomselskap.
+Skriv om den uferdige sakbeskrivelsen til en ryddig, presis Jira-beskrivelse på norsk bokmål.
+${struktur}
+Regler:
+- Behold ALLE faktaopplysninger nøyaktig. Ikke finn på detaljer (navn, tall, lokasjoner, utstyr) som ikke står i originalen.
+- Ikke bruk markdown (ingen #, *, eller bindestrek-lister). Bruk vanlige avsnitt adskilt med linjeskift.
+- Vær konsis. Returner KUN selve beskrivelsen – ingen forklaring, overskrift eller anførselstegn rundt.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 700, system: systemPrompt, messages: [{ role: 'user', content: text }] }),
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI-feil' });
+    const beskrivelse = (data.content?.[0]?.text ?? '').trim();
+    res.json({ beskrivelse });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ========================================
