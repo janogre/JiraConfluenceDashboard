@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, Plus, X, Check, ExternalLink, Loader2, Info, ListTree, AlertCircle, HelpCircle } from 'lucide-react';
+import { Sparkles, Plus, X, Check, ExternalLink, Loader2, Info, ListTree, AlertCircle, HelpCircle, PenLine, RotateCcw } from 'lucide-react';
 import { getProjects, getCurrentUser, searchJiraUsers, createIssue } from '../../services/jiraService';
 import { getAnthropicKey } from '../../services/api';
 import { Button } from '../../components/common';
@@ -173,6 +173,10 @@ export function NySak() {
   const [classifying, setClassifying] = useState(false);
   const [classifyError, setClassifyError] = useState('');
   const [begrunnelse, setBegrunnelse] = useState('');
+  const [skrivOm, setSkrivOm] = useState(false);
+  const [skrivOmError, setSkrivOmError] = useState('');
+  const [forrigeFritekst, setForrigeFritekst] = useState('');
+  const [omskrevet, setOmskrevet] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [opprettStatus, setOpprettStatus] = useState('');
@@ -348,6 +352,47 @@ export function NySak() {
     }
   }
 
+  // Valgfri AI-omskriving av beskrivelsen (kjøres kun når brukeren trykker).
+  async function handleSkrivOm() {
+    const apiKey = getAnthropicKey();
+    if (!apiKey) {
+      setSkrivOmError('Mangler Anthropic API-nøkkel. Legg den til under Innstillinger.');
+      return;
+    }
+    if (!fritekst.trim()) {
+      setSkrivOmError('Skriv en beskrivelse først.');
+      return;
+    }
+    setSkrivOm(true);
+    setSkrivOmError('');
+    try {
+      const response = await fetch('http://localhost:3001/api/ai/rewrite-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, text: fritekst, arbeidstype }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'AI-feil');
+      const ny = String(data.beskrivelse ?? '').trim();
+      if (!ny) {
+        setSkrivOmError('AI returnerte en tom beskrivelse.');
+        return;
+      }
+      setForrigeFritekst(fritekst);
+      setFritekst(ny);
+      setOmskrevet(true);
+    } catch (err) {
+      setSkrivOmError(err instanceof Error ? err.message : 'Ukjent feil');
+    } finally {
+      setSkrivOm(false);
+    }
+  }
+
+  function angreOmskriving() {
+    setFritekst(forrigeFritekst);
+    setOmskrevet(false);
+  }
+
   async function handleOpprett() {
     if (!summary.trim()) {
       setCreateError('Tittel er påkrevd.');
@@ -417,6 +462,9 @@ export function NySak() {
     setClassifyError('');
     setVisMangler(false);
     setAiOppfolging({});
+    setOmskrevet(false);
+    setForrigeFritekst('');
+    setSkrivOmError('');
     // Beholder jiraProjectKey og assignee bevisst for rask gjentatt registrering.
   }
 
@@ -498,14 +546,33 @@ export function NySak() {
             rows={6}
           />
           {feltSporsmal('beskrivelse')}
-          <Button
-            variant="primary"
-            icon={classifying ? <Loader2 size={16} className={styles.spin} /> : <Sparkles size={16} />}
-            onClick={handleForeslaa}
-            disabled={classifying}
-          >
-            {classifying ? 'Analyserer…' : 'Foreslå med AI'}
-          </Button>
+          <div className={styles.aiKnapper}>
+            <Button
+              variant="secondary"
+              icon={skrivOm ? <Loader2 size={16} className={styles.spin} /> : <PenLine size={16} />}
+              onClick={handleSkrivOm}
+              disabled={skrivOm || !fritekst.trim()}
+            >
+              {skrivOm ? 'Skriver om…' : 'Skriv om beskrivelse'}
+            </Button>
+            <Button
+              variant="primary"
+              icon={classifying ? <Loader2 size={16} className={styles.spin} /> : <Sparkles size={16} />}
+              onClick={handleForeslaa}
+              disabled={classifying}
+            >
+              {classifying ? 'Analyserer…' : 'Foreslå med AI'}
+            </Button>
+          </div>
+          {omskrevet && (
+            <p className={styles.omskrevetNote}>
+              <Sparkles size={12} /> Beskrivelsen er omskrevet av AI – juster fritt.
+              <button type="button" className={styles.angreLenke} onClick={angreOmskriving}>
+                <RotateCcw size={12} /> Angre
+              </button>
+            </p>
+          )}
+          {skrivOmError && <p className={styles.feil}>{skrivOmError}</p>}
           {classifyError && <p className={styles.feil}>{classifyError}</p>}
           {begrunnelse && (
             <p className={styles.begrunnelse}><Info size={13} /> {begrunnelse}</p>

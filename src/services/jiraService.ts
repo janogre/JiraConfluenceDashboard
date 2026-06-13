@@ -855,10 +855,17 @@ export async function createIssue(
   };
 
   if (options?.description) {
+    // Del beskrivelsen på linjeskift til flere ADF-avsnitt, slik at strukturert
+    // tekst (f.eks. Symptom/Konsekvens/Antatt årsak) rendres riktig i Jira.
+    const avsnitt = options.description.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const linjer = avsnitt.length ? avsnitt : [options.description];
     fields.description = {
       version: 1,
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: options.description }] }],
+      content: linjer.map((linje) => ({
+        type: 'paragraph',
+        content: [{ type: 'text', text: linje }],
+      })),
     };
   }
 
