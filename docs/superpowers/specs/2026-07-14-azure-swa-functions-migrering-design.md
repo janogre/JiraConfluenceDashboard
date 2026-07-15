@@ -169,7 +169,8 @@ Application Insights slås på fra dag én på **begge** kjøremiljøer (SWA man
 
 Ingen i repoet; settes som app settings i klartekst (bevisst valg — managed functions støtter ikke MI/KV).
 
-- **SWA (managed functions):** `SESSION_SECRET` (32 byte), `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `OAUTH_REDIRECT_URI` (= `https://<domene>/api/auth/callback`), `FRONTEND_URL` (= domenerot), `BC_TENANT_ID`, `BC_CLIENT_ID`, `BC_CLIENT_SECRET`, `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+- **SWA (managed functions):** `SESSION_SECRET` (32 byte), `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`, `OAUTH_REDIRECT_URI` (= `https://<domene>/api/auth/callback`), `FRONTEND_URL` (= domenerot), `BC_TENANT_ID`, `BC_CLIENT_ID`, `BC_CLIENT_SECRET`, **`BC_COMPANY_ID`**, **`BC_ENVIRONMENT`**, `BC_ITEM_GROUPS` (valgfri, default `KOM,DRIFT`), `APPLICATIONINSIGHTS_CONNECTION_STRING`. **Merk:** BC-tjenestene krever `BC_COMPANY_ID` og `BC_ENVIRONMENT` for alle data-kall — uten dem gir BC-endepunktene 500 selv om auth (tenant/client/secret) er satt.
+- **Sikkerhet — env-apikey-fallback:** Sett ALDRI `ATLASSIAN_EMAIL`/`ATLASSIAN_API_TOKEN`/`JIRA_BASE_URL` som app settings på den offentlige SWA-en. Disse aktiverer en delt-token-fallback i `resolveAuth` som ville gjort `/api/atlassian/proxy` til en åpen, uautentisert proxy (endepunktene er `authLevel: anonymous`). Fallbacken er kun for lokal utvikling og er gated bak `ALLOW_ENV_APIKEY=true` (av som standard).
 - **AI Function App:** `ANTHROPIC_API_KEY`, CORS-allowlist (SWA-domenet), `APPLICATIONINSIGHTS_CONNECTION_STRING`.
 - **Reserverte prefikser:** unngå app-setting-navn med SWA-reserverte prefikser (`WEBSITE_`, `FUNCTIONS_`, `IDENTITY_`, `SCM_`, m.fl.).
 

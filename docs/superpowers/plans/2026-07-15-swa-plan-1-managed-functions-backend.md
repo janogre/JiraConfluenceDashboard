@@ -161,7 +161,10 @@ Ingen commit — ingen fil endret i denne tasken.
     "CONFLUENCE_BASE_URL": "",
     "BC_TENANT_ID": "",
     "BC_CLIENT_ID": "",
-    "BC_CLIENT_SECRET": ""
+    "BC_CLIENT_SECRET": "",
+    "BC_COMPANY_ID": "",
+    "BC_ENVIRONMENT": "",
+    "BC_ITEM_GROUPS": "KOM,DRIFT"
   }
 }
 ```
