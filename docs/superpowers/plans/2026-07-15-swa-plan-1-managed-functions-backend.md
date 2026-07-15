@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Runtime:** Node 22, ESM (`"type": "module"` i `api/package.json`). Ingen TypeScript i `api/` — ren JS. (SWA managed functions støtter `apiRuntime` opp til `node:22`; ikke `node:24`.)
+- **Runtime:** ESM (`"type": "module"` i `api/package.json`), Node ≥22. Ingen TypeScript i `api/` — ren JS. Deploy-runtime pinnes til `node:22` i Azure (Plan 3); lokal kjøring på Node 24 er OK fordi Functions v4 støtter både 22 og 24. `node:24` er ikke en gyldig apiRuntime for SWA managed functions.
 - **Pakkeverktøy:** npm (ikke pnpm). Ref. spec §2.
 - **Funksjonsmodell:** `@azure/functions` v4. Alle funksjoner registreres med `app.http(...)` og `authLevel: 'anonymous'` (SWA managed functions bruker ikke funksjonsnøkler for auth).
 - **Rute-prefiks:** Standard `routePrefix` = `api` beholdes (settes ikke i `host.json`). En funksjon med `route: 'auth/me'` nås derfor på `/api/auth/me`.
@@ -68,51 +68,19 @@ api/
 
 ---
 
-## Task 0: Verktøykjede — Node 22 og Azure Functions Core Tools v4
+## Task 0: Verktøykjede — Azure Functions Core Tools v4 (Node 22/24) ✅ FULLFØRT
 
 **Files:** ingen (lokal verktøyinstallasjon; ingenting sjekkes inn).
 
 **Interfaces:**
 - Consumes: ingenting.
-- Produces: aktiv `node` v22 og `func` v4 på PATH — som alle senere tasks bruker til `func start`.
+- Produces: `func` v4 og Node (≥22) på PATH — som alle senere tasks bruker til `func start`.
 
-*Merk:* SWA managed functions støtter `apiRuntime` opp til `node:22` (ikke `node:24`), så vi kjører Node 22 lokalt for at `func start` skal matche Azure-målet. Maskinen kan ha en annen Node-versjon (f.eks. 24) installert; bruk en versjonsmanager for å aktivere 22 uten å fjerne den andre. Global verktøyinstallasjon kan kreve rettigheter og at et nytt terminalvindu åpnes for at PATH skal oppdateres.
+*Beslutning (denne maskinen):* Deploy-målet er `node:22` (SWA managed functions støtter `node:20`/`node:22`, ikke `node:24`), men lokal kjøring skjer på maskinens **Node 24** — Azure Functions v4-runtime støtter både Node 22 og 24, så `func start` kjører likt. Koden bruker kun API-er felles for 22/24. Node 22-pinningen settes i `staticwebapp.config.json` i Plan 3 (ikke her). Maskinen mangler versjonsmanager (nvm/winget/choco) og admin, så en portabel/MSI Node 22 ble bevisst valgt bort til fordel for Node 24 lokalt.
 
-- [ ] **Step 1: Sjekk aktiv Node-versjon**
-
-Run: `node -v`
-Expected: `v22.x` → hopp til Step 3. Er det en annen versjon, fortsett til Step 2.
-
-- [ ] **Step 2: Aktiver Node 22 via nvm-windows**
-
-Har du ikke nvm-windows fra før:
-```powershell
-winget install CoreyButler.NVMforWindows
-```
-(åpne et nytt terminalvindu etterpå). Deretter:
-```powershell
-nvm install 22
-nvm use 22
-```
-Verifiser: `node -v` → `v22.x`.
-
-- [ ] **Step 3: Sjekk om `func` allerede er installert (under aktiv Node)**
-
-Run: `func --version`
-Expected: enten `4.x` (hopp til Step 5), eller «command not found»/«ikke gjenkjent» (fortsett til Step 4).
-
-- [ ] **Step 4: Installer Azure Functions Core Tools v4**
-
-Med Node 22 aktiv, primær metode (via npm):
-```bash
-npm i -g azure-functions-core-tools@4 --unsafe-perm true
-```
-Windows-alternativ (winget): `winget install Microsoft.Azure.FunctionsCoreTools`
-Åpne nytt terminalvindu hvis `func` ikke gjenkjennes umiddelbart.
-
-- [ ] **Step 5: Verifiser verktøykjeden**
-
-Run: `node -v` → `v22.x` og `func --version` → `4.x`.
+- [x] **Step 1: Node på PATH (≥22)** — `node -v` → `v24.4.1` (tilfredsstiller func v4).
+- [x] **Step 2: Installer func v4** — `npm i -g azure-functions-core-tools@4 --unsafe-perm true` (bruker-prefix `C:\Users\jang\AppData\Roaming\npm`, ingen admin nødvendig).
+- [x] **Step 3: Verifiser** — `func --version` → `4.12.1`.
 
 Ingen commit — ingen fil endret i denne tasken.
 
@@ -250,7 +218,7 @@ Erstatter `server/proxy.js` + `server/businessCentral/` i produksjon på Azure S
 
 ## Kjøre lokalt
 
-Krever Node 22 og Azure Functions Core Tools v4 (`func --version` → 4.x).
+Krever Node 22 eller nyere (func v4 støtter Node 22 og 24) og Azure Functions Core Tools v4 (`func --version` → 4.x).
 
 ```bash
 cd api
