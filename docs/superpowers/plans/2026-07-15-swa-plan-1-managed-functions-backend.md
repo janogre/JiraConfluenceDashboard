@@ -68,6 +68,51 @@ api/
 
 ---
 
+## Task 0: Verktøykjede — Node 20 og Azure Functions Core Tools v4
+
+**Files:** ingen (lokal verktøyinstallasjon; ingenting sjekkes inn).
+
+**Interfaces:**
+- Consumes: ingenting.
+- Produces: fungerende `node` (v20) og `func` (v4) på PATH — som alle senere tasks bruker til `func start`.
+
+*Merk:* Dette er global verktøyinstallasjon på utviklermaskinen. Den kan kreve rettigheter og at et nytt terminalvindu åpnes etterpå for at PATH skal oppdateres. På Windows finnes flere installasjonsveier — velg én.
+
+- [ ] **Step 1: Verifiser Node 20**
+
+Run: `node -v`
+Expected: `v20.x` (eller nyere 20+). Er versjonen eldre, installer Node 20 LTS (https://nodejs.org, eller `winget install OpenJS.NodeJS.LTS`) før du går videre.
+
+- [ ] **Step 2: Sjekk om `func` allerede er installert**
+
+Run: `func --version`
+Expected: enten `4.x` (da er verktøyet på plass — hopp til Step 4), eller en «command not found»/«ikke gjenkjent»-feil (fortsett til Step 3).
+
+- [ ] **Step 3: Installer Azure Functions Core Tools v4**
+
+Velg én metode. Primær (kryssplattform, via npm):
+```bash
+npm i -g azure-functions-core-tools@4 --unsafe-perm true
+```
+Windows-alternativ (winget):
+```powershell
+winget install Microsoft.Azure.FunctionsCoreTools
+```
+Windows-alternativ (Chocolatey):
+```powershell
+choco install azure-functions-core-tools
+```
+Åpne et nytt terminalvindu etter installasjon hvis `func` ikke gjenkjennes umiddelbart (PATH oppdateres først i nye skall).
+
+- [ ] **Step 4: Verifiser at `func` v4 er tilgjengelig**
+
+Run: `func --version`
+Expected: `4.x` (f.eks. `4.0.x`).
+
+Ingen commit — ingen fil endret i denne tasken.
+
+---
+
 ## Task 1: Scaffold `api/`-prosjektet med health-funksjon og testoppsett
 
 **Files:**
@@ -84,7 +129,7 @@ api/
 - Consumes: ingenting.
 - Produces: kjørbart Functions-prosjekt (`func start` → `http://localhost:7071/api/*`) og `npm test`-kommando (`node --test`) som senere tasks henger tester på.
 
-**Forutsetning (verifiser først):** Node 20 (`node -v`) og Azure Functions Core Tools v4 (`func --version` → `4.x`). Mangler `func`: `npm i -g azure-functions-core-tools@4 --unsafe-perm true`.
+**Forutsetning:** Task 0 fullført (Node 20 + `func` v4 tilgjengelig på PATH).
 
 - [ ] **Step 1: Opprett `api/package.json`**
 
