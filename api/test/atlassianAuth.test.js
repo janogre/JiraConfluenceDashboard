@@ -58,3 +58,13 @@ test('buildAuthStatus uten auth returnerer authenticated:false', () => {
   delete process.env.ATLASSIAN_EMAIL;
   assert.deepEqual(buildAuthStatus(null), { authenticated: false });
 });
+
+test('resolveAuth apikey uten kredensialer → AuthError', async () => {
+  delete process.env.ATLASSIAN_EMAIL;
+  await assert.rejects(() => resolveAuth({ authMode: 'apikey' }), (e) => e instanceof AuthError);
+});
+
+test('buildAuthStatus apikey uten kredensialer → ikke autentisert', () => {
+  delete process.env.ATLASSIAN_EMAIL;
+  assert.deepEqual(buildAuthStatus({ authMode: 'apikey' }), { authenticated: false });
+});

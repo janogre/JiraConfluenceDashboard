@@ -110,6 +110,7 @@ export async function resolveAuth(session, fetchFn = fetch) {
     return { authHeader: `Bearer ${s.accessToken}`, session: s, refreshed };
   }
   if (session && session.authMode === 'apikey') {
+    if (!session.apiKeyEmail || !session.apiKeyToken) throw new AuthError('Ufullstendige apikey-kredensialer');
     return { authHeader: basic(session.apiKeyEmail, session.apiKeyToken), session, refreshed: false };
   }
   const env = getEnvApiAuth();
@@ -128,7 +129,7 @@ export function buildAuthStatus(session) {
       availableClouds: session.availableClouds ?? [],
     };
   }
-  if (session && session.authMode === 'apikey') {
+  if (session && session.authMode === 'apikey' && session.apiKeyEmail && session.apiKeyToken) {
     return {
       authenticated: true,
       authMode: 'apikey',
