@@ -24,6 +24,7 @@ Målet er produksjonsdrift på SWA på eget domene. SWA serverer den bygde SPA-e
 | AI-utførelse | **Egne AI-endepunkter på en frittstående Azure Function App** (utenfor `/api`), kalt direkte fra frontend | 45s-taket gjelder alt bak `/api`; frittstående Function App gir 230s |
 | SWA-plan | **Free** | AI-valget krever ikke Standard; eget domene + App Insights + managed functions finnes på Free |
 | Secrets | App settings i klartekst (ingen managed identity / Key Vault) | Managed functions støtter ikke MI/KV; bevisst akseptert ved denne skalaen |
+| Pakkeverktøy | **npm** (ikke pnpm i denne migreringen) | Oryx auto-detekterer ikke `pnpm-lock.yaml`; pnpm-symlinker overlever ikke Functions Zip Deploy. pnpm kan vurderes som egen, isolert endring etter migreringen |
 
 ## 3. Verifiserte plattformbegrensninger (kilder i §14)
 
@@ -197,6 +198,7 @@ AI-valget (frittstående Function App, uavhengig av SWA-plan) og resten av arkit
 - Ingen asynkron jobb-/pollemodell for AI — 230s på AI Function App dekker behovet.
 - Ingen oppdeling av `project-documents` i migreringen (valgfri senere UX-forbedring).
 - Ingen managed identity / Key Vault — bevisst utelatt.
+- Ingen pnpm i denne migreringen — Oryx og Functions-deploy motarbeider pnpm; npm beholdes. Multi-pakke-ergonomi kan evt. dekkes av npm workspaces (avgjøres i planfasen). pnpm er en mulig senere, isolert endring.
 
 ---
 
@@ -206,3 +208,5 @@ AI-valget (frittstående Function App, uavhengig av SWA-plan) og resten av arkit
 - API support with Azure App Service (linked backend) — https://learn.microsoft.com/en-us/azure/static-web-apps/apis-app-service
 - Configure Azure Static Web Apps (apiRuntime, navigationFallback) — https://learn.microsoft.com/en-us/azure/static-web-apps/configuration
 - Azure Functions HTTP 230s-grense (Microsoft Q&A) — https://learn.microsoft.com/en-us/answers/questions/1332955/
+- Oryx pnpm-støtte (åpne feature-requests) — https://github.com/microsoft/Oryx/issues/1150 og https://github.com/microsoft/Oryx/issues/2340
+- pnpm + Azure Functions symlink/deploy-problem — https://github.com/Azure/functions-action/discussions/172 og https://github.com/pnpm/pnpm/issues/6259
