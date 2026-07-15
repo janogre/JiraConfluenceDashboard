@@ -24,9 +24,8 @@ app.http('testConnection', {
       (session?.authMode === 'oauth'
         ? `https://api.atlassian.com/ex/jira/${session.cloudId}/rest/api/3/myself`
         : null);
-    if (!targetUrl) return { jsonBody: { success: false, error: 'Mangler X-Target-URL header' } };
-
     const base = auth.refreshed ? { cookies: [sessionCookie(auth.session)] } : {};
+    if (!targetUrl) return { ...base, jsonBody: { success: false, error: 'Mangler X-Target-URL header' } };
     try {
       const response = await fetch(targetUrl, {
         headers: { Authorization: auth.authHeader, Accept: 'application/json' },

@@ -2,7 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.SESSION_SECRET = 'test-hemmelighet-som-er-lang-nok-1234';
-const { encrypt, decrypt, sessionCookie, COOKIE_NAME } = await import('../src/lib/session.js');
+const {
+  encrypt, decrypt, sessionCookie, COOKIE_NAME,
+  readCookie, readSession, stateCookie, clearSessionCookie, clearStateCookie,
+} = await import('../src/lib/session.js');
 
 test('encrypt → decrypt gir tilbake samme objekt', () => {
   const obj = { authMode: 'oauth', accessToken: 'abc', n: 1 };
@@ -64,4 +67,28 @@ test('sessionCookie: trimming bringer en availableClouds-tung cookie under budsj
   assert.equal(stored.availableClouds, undefined);
   assert.equal(stored.cloudsTrimmed, true);
   assert.ok(c.value.length <= 3900, `cookie skal være under budsjett, var ${c.value.length}`);
+});
+
+test('readCookie henter riktig verdi og dekoder prosent-koding', () => {
+  const req = { headers: { get: (h) => (h === 'cookie' ? 'a=1; jcd_session=abc%20def; b=2' : null) } };
+  assert.equal(readCookie(req, 'jcd_session'), 'abc def');
+  assert.equal(readCookie(req, 'finnesikke'), null);
+});
+
+test('readSession dekrypterer en cookie satt av sessionCookie', () => {
+  const c = sessionCookie({ authMode: 'apikey', apiKeyEmail: 'a@b.no' });
+  const req = { headers: { get: (h) => (h === 'cookie' ? `${COOKIE_NAME}=${c.value}` : null) } };
+  const s = readSession(req);
+  assert.equal(s.authMode, 'apikey');
+  assert.equal(s.apiKeyEmail, 'a@b.no');
+});
+
+test('stateCookie round-trip via decrypt', () => {
+  const c = stateCookie('s-123');
+  assert.equal(decrypt(decodeURIComponent(c.value)).state, 's-123');
+});
+
+test('clearSessionCookie/clearStateCookie har maxAge 0', () => {
+  assert.equal(clearSessionCookie().maxAge, 0);
+  assert.equal(clearStateCookie().maxAge, 0);
 });

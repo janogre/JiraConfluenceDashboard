@@ -18,6 +18,7 @@ app.http('authSelectCloud', {
     } catch {
       return { status: 400, jsonBody: { error: 'Ugyldig body' } };
     }
+    if (!body || typeof body !== 'object') return { status: 400, jsonBody: { error: 'Ugyldig body' } };
     let clouds = session.availableClouds;
     if (!clouds && session.cloudsTrimmed) {
       try {

@@ -68,3 +68,9 @@ test('buildAuthStatus apikey uten kredensialer → ikke autentisert', () => {
   delete process.env.ATLASSIAN_EMAIL;
   assert.deepEqual(buildAuthStatus({ authMode: 'apikey' }), { authenticated: false });
 });
+
+test('resolveAuth: nettverksfeil under token-fornyelse → AuthError', async () => {
+  const failFetch = async () => { throw new TypeError('nettverk nede'); };
+  const s = { authMode: 'oauth', accessToken: 'OLD', refreshToken: 'R1', tokenExpiresAt: Date.now() - 1000 };
+  await assert.rejects(() => resolveAuth(s, failFetch), (e) => e instanceof AuthError);
+});

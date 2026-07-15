@@ -77,6 +77,9 @@ function basic(email, token) {
 }
 
 export function getEnvApiAuth() {
+  // Kun for lokal utvikling. Uten dette flagget er env-apikey-fallbacken inaktiv,
+  // slik at den aldri kan gjøre proxyen til en åpen, uautentisert proxy i prod.
+  if (process.env.ALLOW_ENV_APIKEY !== 'true') return null;
   const email = process.env.ATLASSIAN_EMAIL;
   const apiToken = process.env.ATLASSIAN_API_TOKEN;
   const jiraBaseUrl = process.env.JIRA_BASE_URL;
@@ -106,7 +109,14 @@ export async function ensureFreshToken(session, fetchFn = fetch) {
 // Bestemmer Authorization-header ut fra session (med env-fallback). Kaster AuthError.
 export async function resolveAuth(session, fetchFn = fetch) {
   if (session && session.authMode === 'oauth') {
-    const { session: s, refreshed } = await ensureFreshToken(session, fetchFn);
+    let refreshedResult;
+    try {
+      refreshedResult = await ensureFreshToken(session, fetchFn);
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+      throw new AuthError('Token-fornyelse feilet');
+    }
+    const { session: s, refreshed } = refreshedResult;
     return { authHeader: `Bearer ${s.accessToken}`, session: s, refreshed };
   }
   if (session && session.authMode === 'apikey') {

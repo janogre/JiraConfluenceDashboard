@@ -14,6 +14,7 @@ app.http('authApikey', {
     } catch {
       return { status: 400, jsonBody: { error: 'Ugyldig body' } };
     }
+    if (!body || typeof body !== 'object') return { status: 400, jsonBody: { error: 'Ugyldig body' } };
     const { email, apiToken, jiraBaseUrl, confluenceBaseUrl } = body;
     if (!email || !apiToken || !jiraBaseUrl) {
       return { status: 400, jsonBody: { error: 'Mangler påkrevde felt' } };
