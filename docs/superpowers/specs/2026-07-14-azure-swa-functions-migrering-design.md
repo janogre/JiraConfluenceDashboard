@@ -69,7 +69,7 @@ Erstatter `express-session` + `session-file-store` med en **kryptert, stateless 
 
 ### Avveininger
 - **Roterende refresh-tokens (H, akseptert):** Atlassian ugyldiggjør forrige refresh-token ved fornyelse. Åpner en bruker flere faner nøyaktig når access-token utløper, kan én fornyelse «vinne» og de andre få en engangs re-login. Dempes ved å fornye litt før utløp og returnere `reauthRequired` ved feil (som i dag). Akseptabelt ved 1–10 brukere.
-- **Cookie-størrelse (H.1-mitigering):** Access-token (JWT) + refresh + `availableClouds` må holdes under ~4 KB. Blir cookien for stor, droppes `availableClouds` fra cookien og hentes på nytt ved behov.
+- **Cookie-størrelse (H.1-mitigering):** Access-token (JWT) + refresh + `availableClouds` må holdes under ~4 KB. Blir cookien for stor, droppes `availableClouds` fra cookien og hentes på nytt ved behov. Er cookien fortsatt over budsjett etter trimming (f.eks. et uvanlig stort access-token — usannsynlig for Atlassian-JWT-er), kan ikke essensielle felter droppes; da logges en tydelig advarsel (fanges av App Insights) i stedet for å produsere en cookie nettleseren stille avviser.
 
 ### Managed-function-endepunkter for auth
 `auth/atlassian`, `auth/callback`, `auth/me`, `auth/select-cloud`, `auth/logout`, **`auth/apikey`** (beholdes som midlertidig reserve til OAuth er verifisert i prod — se §8d). `auth/set-anthropic-key` fjernes (se §8c).
