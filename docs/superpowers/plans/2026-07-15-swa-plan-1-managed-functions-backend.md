@@ -53,6 +53,7 @@ api/
       bc/
         auth.js                  # KOPIERT uendret fra server/businessCentral/
         itemsService.js          # KOPIERT uendret
+        inventoryByLocationService.js # KOPIERT uendret (transitiv avh. av itemsService)
         locationsService.js      # KOPIERT uendret
         purchaseOrdersService.js # KOPIERT uendret
         itemLedgerEntriesService.js # KOPIERT uendret
@@ -1229,6 +1230,7 @@ git commit -m "Legg til Atlassian-proxy og test-connection som Functions"
 - Create (kopier uendret fra `server/businessCentral/`):
   - `api/src/lib/bc/auth.js`
   - `api/src/lib/bc/itemsService.js`
+  - `api/src/lib/bc/inventoryByLocationService.js` (transitiv avhengighet: `itemsService.js` importerer `getInventoryByLocation` herfra)
   - `api/src/lib/bc/locationsService.js`
   - `api/src/lib/bc/purchaseOrdersService.js`
   - `api/src/lib/bc/itemLedgerEntriesService.js`
@@ -1244,22 +1246,32 @@ git commit -m "Legg til Atlassian-proxy og test-connection som Functions"
 
 *Merk:* tjenestefilene bruker `fetch` + `getBcToken` og er allerede stateless (per-instans token-cache). De kopieres uendret; de innbyrdes relative importene (`./auth.js` osv.) består fordi alle BC-filene flyttes sammen. Kun Express-routeren (`index.js`) erstattes.
 
-- [ ] **Step 1: Kopier de fem BC-filene uendret**
+- [ ] **Step 1: Kopier de seks BC-filene uendret**
 
 Run (fra repo-rot, Git Bash):
 ```bash
 mkdir -p api/src/lib/bc
 cp server/businessCentral/auth.js api/src/lib/bc/auth.js
 cp server/businessCentral/itemsService.js api/src/lib/bc/itemsService.js
+cp server/businessCentral/inventoryByLocationService.js api/src/lib/bc/inventoryByLocationService.js
 cp server/businessCentral/locationsService.js api/src/lib/bc/locationsService.js
 cp server/businessCentral/purchaseOrdersService.js api/src/lib/bc/purchaseOrdersService.js
 cp server/businessCentral/itemLedgerEntriesService.js api/src/lib/bc/itemLedgerEntriesService.js
 ```
-Verifiser at ingen av de fem importerer noe utenfor `api/src/lib/bc/` (kun `./`-importer og innebygde moduler):
+NB: `index.js` kopieres IKKE (erstattes av `handler.js` + `bc.js`). `inventoryByLocationService.js` MÅ med — `itemsService.js` importerer `getInventoryByLocation` fra den.
+
+Verifiser (a) at ingen fil importerer noe utenfor `bc/`:
 ```bash
 grep -RnE "from '\.\./|from '\.\.\\\\" api/src/lib/bc/
 ```
-Expected: ingen treff (tom utskrift). Får du treff, må den refererte fila også flyttes inn i `bc/`.
+Expected: ingen treff.
+
+Verifiser (b) at hver `./`-import peker på en fil som faktisk finnes i `bc/` (fanger manglende transitive avhengigheter):
+```bash
+for f in $(grep -rhoE "from '\./[a-zA-Z]+\.js'" api/src/lib/bc/ | sed -E "s/from '\.\/(.*)'/\1/" | sort -u); do
+  [ -f "api/src/lib/bc/$f" ] && echo "OK  $f" || echo "MANGLER $f"; done
+```
+Expected: alle linjer `OK ...`, ingen `MANGLER`. Får du `MANGLER`, kopier den fila fra `server/businessCentral/` også.
 
 - [ ] **Step 2: Skriv den feilende testen `api/test/bc.test.js`**
 
