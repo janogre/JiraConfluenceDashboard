@@ -70,7 +70,9 @@ Erstatter `express-session` + `session-file-store` med en **kryptert, stateless 
 - **Cookie-størrelse (H.1-mitigering):** Access-token (JWT) + refresh + `availableClouds` må holdes under ~4 KB. Blir cookien for stor, droppes `availableClouds` fra cookien og hentes på nytt ved behov.
 
 ### Managed-function-endepunkter for auth
-`auth/atlassian`, `auth/callback`, `auth/me`, `auth/select-cloud`, `auth/logout`. (`auth/apikey` og `auth/set-anthropic-key` — se §8 om opprydding.)
+`auth/atlassian`, `auth/callback`, `auth/me`, `auth/select-cloud`, `auth/logout`, **`auth/apikey`** (beholdes som midlertidig reserve til OAuth er verifisert i prod — se §8d). `auth/set-anthropic-key` fjernes (se §8c).
+
+I den stateless modellen legges apikey-kredensialene (`email`, `apiToken`, `jiraBaseUrl`, `confluenceBaseUrl`) i den **samme** krypterte cookien som OAuth-sesjonen. `resolveAuth()` håndterer begge moduser: OAuth → `Bearer`-token + cloudId-ruting, apikey → `Basic`-auth (`email:apiToken`).
 
 ## 6. Managed functions: Atlassian + Business Central
 
@@ -135,7 +137,10 @@ AI-kallene bruker i dag hardkodet `http://localhost:3001/api/ai/*` via rå `fetc
 `VITE_AI_API_BASE` (og function-key) settes som build-time miljøvariabel.
 
 ### c) Anthropic-nøkkel blir server-side (opprydding)
-Med delt server-side `ANTHROPIC_API_KEY` fjernes klient-nøkkel-flyten: `getAnthropicKey()`-gating i komponentene, Anthropic-feltene i `Login.tsx`/`Settings.tsx`, og `/auth/set-anthropic-key` (+ `authApiKey`/`apikey`-modus dersom den ikke lenger brukes i prod). Bekreftes under planlegging.
+Med delt server-side `ANTHROPIC_API_KEY` fjernes klient-nøkkel-flyten: `getAnthropicKey()`-gating i komponentene, Anthropic-feltene i `Login.tsx`/`Settings.tsx`, og endepunktet `/auth/set-anthropic-key`. Dette er uavhengig av apikey-innloggingsmodus (§8d). Bekreftes under planlegging.
+
+### d) API-nøkkel-innlogging beholdes som midlertidig reserve
+OAuth per bruker er ikke ferdig verifisert i produksjon ennå. Til det er bekreftet, beholdes `auth/apikey`-modus — både endepunktet (§5) og innloggings-UI-en i `Login.tsx`/`Settings.tsx` — som reserve-innlogging. Den fjernes når OAuth er bekreftet å fungere i prod (se §15). Merk: dette betyr at et personlig/delt Atlassian-token lagres i den krypterte cookien på lik linje med OAuth-tokens; akseptabelt som midlertidig tilstand ved denne skalaen.
 
 ## 9. staticwebapp.config.json
 ```json
@@ -184,6 +189,7 @@ AI-valget (frittstående Function App, uavhengig av SWA-plan) og resten av arkit
 3. **Node 20-status:** dokumentavvik (preview vs. GA). Verifiser `node:20` ved første deploy; `node:22` er alternativ.
 4. **Roterende refresh-tokens:** akseptert engangs re-login i sjeldne fler-fane-race. Revurderes kun ved skala-økning (da: delt lager med låsing).
 5. **Ingen lokal håndheving av 45s:** verifiser managed-function-responstider i Azure, ikke lokalt.
+6. **Midlertidig apikey-reserve:** API-nøkkel-innlogging beholdes bevisst til OAuth er verifisert i prod, og fjernes deretter. Ikke behandle den som permanent — den lagrer et personlig/delt Atlassian-token i cookien. Definer et konkret «OAuth verifisert»-kriterium under planleggingen som utløser fjerningen.
 
 ## 16. Ikke-mål / YAGNI
 
