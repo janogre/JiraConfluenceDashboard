@@ -41,7 +41,7 @@ app.http('testConnection', {
       }
       return { ...base, jsonBody: { success: true, status: response.status, message: 'Tilkobling vellykket!' } };
     } catch (err) {
-      return { jsonBody: { success: false, error: err.message } };
+      return { ...base, jsonBody: { success: false, error: err.message } };
     }
   },
 });

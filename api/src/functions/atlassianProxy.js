@@ -20,8 +20,12 @@ app.http('atlassianProxy', {
       throw err;
     }
 
+    // Fornyet session-cookie må følge med på ALLE svar-veier når token ble rotert,
+    // ellers mister klienten det roterte tokenet ved feil (og må logge inn på nytt).
+    const refreshedCookies = auth.refreshed ? [sessionCookie(auth.session)] : undefined;
+
     const targetUrl = request.headers.get('x-target-url');
-    if (!targetUrl) return { status: 400, jsonBody: { error: 'Mangler X-Target-URL header' } };
+    if (!targetUrl) return { status: 400, cookies: refreshedCookies, jsonBody: { error: 'Mangler X-Target-URL header' } };
 
     const bodyText = request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : '';
 
@@ -36,10 +40,10 @@ app.http('atlassianProxy', {
       });
     } catch (err) {
       console.error('[PROXY] Feil:', err.message);
-      return { status: 500, jsonBody: { error: 'Proxy-feil', message: err.message } };
+      return { status: 500, cookies: refreshedCookies, jsonBody: { error: 'Proxy-feil', message: err.message } };
     }
 
-    if (auth.refreshed) result.cookies = [sessionCookie(auth.session)];
+    if (refreshedCookies) result.cookies = refreshedCookies;
     return result;
   },
 });

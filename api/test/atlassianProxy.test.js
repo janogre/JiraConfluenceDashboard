@@ -53,3 +53,16 @@ test('forwardToAtlassian sender body kun for ikke-GET', async () => {
   );
   assert.equal(sentBody, '{"a":1}');
 });
+
+test('forwardToAtlassian sender IKKE body for GET', async () => {
+  let sentOpts;
+  const fetchFn = async (_u, opts) => {
+    sentOpts = opts;
+    return fakeResponse({ status: 200, json: {} });
+  };
+  await forwardToAtlassian(
+    { method: 'GET', targetUrl: 'https://x/y', query: new URLSearchParams(), bodyText: 'skal-ignoreres', authHeader: 'Bearer T' },
+    fetchFn,
+  );
+  assert.equal(sentOpts.body, undefined);
+});
