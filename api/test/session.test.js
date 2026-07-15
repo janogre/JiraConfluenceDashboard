@@ -28,14 +28,40 @@ test('sessionCookie har riktig navn og httpOnly', () => {
   assert.equal(c.sameSite, 'Lax');
 });
 
-test('sessionCookie trimmer availableClouds når cookien blir for stor', () => {
+test('sessionCookie advarer når cookien er over budsjett selv etter trimming', () => {
   const big = {
     authMode: 'oauth',
     accessToken: 'x'.repeat(6000),
     availableClouds: [{ id: '1', name: 'a', url: 'u' }],
   };
-  const c = sessionCookie(big);
+  const original = console.warn;
+  let warned = false;
+  console.warn = () => { warned = true; };
+  try {
+    const c = sessionCookie(big);
+    const stored = decrypt(decodeURIComponent(c.value));
+    assert.equal(stored.availableClouds, undefined);
+    assert.equal(stored.cloudsTrimmed, true);
+    assert.equal(warned, true);
+  } finally {
+    console.warn = original;
+  }
+});
+
+test('sessionCookie: trimming bringer en availableClouds-tung cookie under budsjett', () => {
+  const manyClouds = Array.from({ length: 200 }, (_, i) => ({
+    id: `id-${i}`,
+    name: `Sky nummer ${i} med et ganske langt navn`,
+    url: `https://sky-${i}.example.com`,
+  }));
+  const c = sessionCookie({
+    authMode: 'oauth',
+    accessToken: 'x'.repeat(1200),
+    refreshToken: 'y'.repeat(300),
+    availableClouds: manyClouds,
+  });
   const stored = decrypt(decodeURIComponent(c.value));
   assert.equal(stored.availableClouds, undefined);
   assert.equal(stored.cloudsTrimmed, true);
+  assert.ok(c.value.length <= 3900, `cookie skal være under budsjett, var ${c.value.length}`);
 });

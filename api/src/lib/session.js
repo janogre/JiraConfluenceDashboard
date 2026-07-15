@@ -68,6 +68,12 @@ export function sessionCookie(session, maxAge = 3600) {
     // H.1-mitigering (spec §5): dropp availableClouds og marker at de må hentes på nytt.
     value = encrypt({ ...session, availableClouds: undefined, cloudsTrimmed: true });
   }
+  if (value.length > MAX_COOKIE_BYTES) {
+    // Sikkerhetsnett: er cookien fortsatt for stor etter trimming (f.eks. et uvanlig
+    // stort access-token), kan vi ikke droppe essensielle felter. Logg tydelig slik at
+    // App Insights fanger det, i stedet for å produsere en cookie nettleseren stille avviser.
+    console.warn(`[session] Cookie over budsjett etter trimming: ${value.length} > ${MAX_COOKIE_BYTES} byte`);
+  }
   return cookie(COOKIE_NAME, value, maxAge);
 }
 
