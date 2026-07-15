@@ -25,6 +25,7 @@ Målet er produksjonsdrift på SWA på eget domene. SWA serverer den bygde SPA-e
 | SWA-plan | **Free** | AI-valget krever ikke Standard; eget domene + App Insights + managed functions finnes på Free |
 | Secrets | App settings i klartekst (ingen managed identity / Key Vault) | Managed functions støtter ikke MI/KV; bevisst akseptert ved denne skalaen |
 | Pakkeverktøy | **npm** (ikke pnpm i denne migreringen) | Oryx auto-detekterer ikke `pnpm-lock.yaml`; pnpm-symlinker overlever ikke Functions Zip Deploy. pnpm kan vurderes som egen, isolert endring etter migreringen |
+| Anthropic-nøkkel | Delt server-side `ANTHROPIC_API_KEY`; klient-nøkkel-UI fjernes | Ett internt verktøy; enklere drift enn nøkkel per bruker |
 
 ## 3. Verifiserte plattformbegrensninger (kilder i §14)
 
@@ -137,8 +138,8 @@ AI-kallene bruker i dag hardkodet `http://localhost:3001/api/ai/*` via rå `fetc
 
 `VITE_AI_API_BASE` (og function-key) settes som build-time miljøvariabel.
 
-### c) Anthropic-nøkkel blir server-side (opprydding)
-Med delt server-side `ANTHROPIC_API_KEY` fjernes klient-nøkkel-flyten: `getAnthropicKey()`-gating i komponentene, Anthropic-feltene i `Login.tsx`/`Settings.tsx`, og endepunktet `/auth/set-anthropic-key`. Dette er uavhengig av apikey-innloggingsmodus (§8d). Bekreftes under planlegging.
+### c) Anthropic-nøkkel blir server-side (besluttet)
+Anthropic-nøkkelen samles til én delt server-side `ANTHROPIC_API_KEY` på AI Function App-en. Klient-nøkkel-flyten fjernes: `getAnthropicKey()`-gating i komponentene, Anthropic-feltene i `Login.tsx`/`Settings.tsx`, og endepunktet `/auth/set-anthropic-key`. Dette er uavhengig av apikey-innloggingsmodus (§8d) — det gjelder kun hvor Anthropic-nøkkelen bor.
 
 ### d) API-nøkkel-innlogging beholdes som midlertidig reserve
 OAuth per bruker er ikke ferdig verifisert i produksjon ennå. Til det er bekreftet, beholdes `auth/apikey`-modus — både endepunktet (§5) og innloggings-UI-en i `Login.tsx`/`Settings.tsx` — som reserve-innlogging. Den fjernes når OAuth er bekreftet å fungere i prod (se §15). Merk: dette betyr at et personlig/delt Atlassian-token lagres i den krypterte cookien på lik linje med OAuth-tokens; akseptabelt som midlertidig tilstand ved denne skalaen.
