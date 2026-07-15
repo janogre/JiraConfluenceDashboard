@@ -34,7 +34,7 @@ Målet er produksjonsdrift på SWA på eget domene. SWA serverer den bygde SPA-e
 - **Managed functions støtter ikke managed identity eller Key Vault-referanser** (apis-functions, tabell: begge «✕»). Secrets må ligge som app settings i klartekst.
 - **Logging krever Application Insights:** apis-functions: *«Logs are only available if you add Application Insights.»*
 - **Frittstående Azure Functions HTTP-tak: 230 sekunder** (Azure Load Balancer idle-timeout, 502 ved overskridelse). Rikelig for AI-kall på 20–60s.
-- **Node-runtime pinnes** via `platform.apiRuntime` i `staticwebapp.config.json` (f.eks. `node:20`).
+- **Node-runtime pinnes** via `platform.apiRuntime` i `staticwebapp.config.json`. SWA managed functions støtter `node:20` og `node:22` (begge GA, ingen sluttdato); `node:24` er **ikke** en gyldig verdi for managed functions. Vi bruker `node:22` (gjeldende aktive LTS). Frittstående Functions v4-runtime (AI-appen) støtter Node 22 og 24.
 
 ## 4. Overordnet arkitektur
 
@@ -82,7 +82,7 @@ I den stateless modellen legges apikey-kredensialene (`email`, `apiToken`, `jira
 ```
 api/
   host.json                 extensionBundle, logging
-  package.json              "main", @azure/functions ^4, Node 20 (ingen express/session)
+  package.json              "main", @azure/functions ^4, Node 22 (ingen express/session)
   src/
     functions/
       atlassianProxy.js      route: atlassian/proxy   (app.http, alle metoder)
@@ -100,12 +100,12 @@ api/
                              item-consumption, item-ledger-entries) — logikk uendret
 ```
 
-- **Node-runtime pinnes eksplisitt:** `platform.apiRuntime: "node:20"` i `staticwebapp.config.json`, i tillegg til v4-modellens krav (`main`-felt i `api/package.json`, `@azure/functions` v4, `host.json` med extensionBundle). *Merk dokumentavvik:* eldre apis-functions-side kaller Node 20 «(preview)», mens runtime-tabellen i configuration lister `node:20` som støttet/GA. Vi bruker `node:20`; verifiseres ved første deploy.
+- **Node-runtime pinnes eksplisitt:** `platform.apiRuntime: "node:22"` i `staticwebapp.config.json`, i tillegg til v4-modellens krav (`main`-felt i `api/package.json`, `@azure/functions` v4, `host.json` med extensionBundle). Verifisert mot Microsoft Learn (languages-runtimes, oppdatert 2026-02-25): `node:20` og `node:22` er begge støttet uten sluttdato; `node:24` finnes ikke i apiRuntime-listen for managed functions. Node 22 valgt som gjeldende aktive LTS.
 - **Business Central:** BC bruker app-nivå client-credentials mot Entra ID med per-instans token-cache — allerede stateless. Kun `index.js` (Express Router) erstattes av `bc.js`. Tjenestefilene er ren `fetch` og portes tilnærmet uendret. Kjent datatilgangsbegrensning (BC-permission på `projects`) er urelatert til migreringen.
 
 ## 7. AI Function App (frittstående)
 
-- **Ressurs:** egen Azure Function App, Consumption-plan, Node 20, eget origin (`https://<ai-app>.azurewebsites.net`, eventuelt subdomene `ai.<domene>`).
+- **Ressurs:** egen Azure Function App, Consumption-plan, Node 22, eget origin (`https://<ai-app>.azurewebsites.net`, eventuelt subdomene `ai.<domene>`).
 - **Endepunkter (portes uendret fra `server/proxy.js`):** `ai/digest`, `ai/timeline-report`, `ai/rewrite-meeting`, `ai/project-documents`, `ai/suggest-subtasks`, `ai/classify-issue`, `ai/rewrite-description`.
 - **Timeout:** 230s-tak fjerner 45s-problemet for alle AI-kall, også framtidige, rikere utdata. (`project-documents` på 4000 tokens ligger komfortabelt under 230s; oppdeling i parallelle per-dokument-kall er en *valgfri* UX-forbedring, ikke nødvendig for korrekthet — utenfor scope her.)
 - **Nøkkel:** server-side `ANTHROPIC_API_KEY` som app setting. Klient-sendt nøkkel fjernes (se §8).
@@ -147,7 +147,7 @@ OAuth per bruker er ikke ferdig verifisert i produksjon ennå. Til det er bekref
 ## 9. staticwebapp.config.json
 ```json
 {
-  "platform": { "apiRuntime": "node:20" },
+  "platform": { "apiRuntime": "node:22" },
   "navigationFallback": { "rewrite": "/index.html", "exclude": ["/assets/*"] }
 }
 ```
@@ -188,7 +188,7 @@ AI-valget (frittstående Function App, uavhengig av SWA-plan) og resten av arkit
 
 1. **AI-endepunkt-sikkerhet:** function-key i frontend er ikke en ekte hemmelighet. Demp med Anthropic-forbrukstak/varsling og `max_tokens`-cap; vurder sterkere beskyttelse kun hvis bruken utvides utover internt team.
 2. **Cookie-størrelse:** overvåk at session-cookien holder seg < ~4 KB; fallback er å droppe `availableClouds` fra cookien.
-3. **Node 20-status:** dokumentavvik (preview vs. GA). Verifiser `node:20` ved første deploy; `node:22` er alternativ.
+3. **Node-runtime (avklart):** `node:22` valgt og verifisert som støttet apiRuntime for managed functions (languages-runtimes, 2026-02-25). `node:24` er ikke gyldig for managed functions; `node:20` er fortsatt støttet men eldre LTS. Lokal utvikling kjøres på Node 22 for å matche Azure-målet.
 4. **Roterende refresh-tokens:** akseptert engangs re-login i sjeldne fler-fane-race. Revurderes kun ved skala-økning (da: delt lager med låsing).
 5. **Ingen lokal håndheving av 45s:** verifiser managed-function-responstider i Azure, ikke lokalt.
 6. **Midlertidig apikey-reserve:** API-nøkkel-innlogging beholdes bevisst til OAuth er verifisert i prod, og fjernes deretter. Ikke behandle den som permanent — den lagrer et personlig/delt Atlassian-token i cookien. Definer et konkret «OAuth verifisert»-kriterium under planleggingen som utløser fjerningen.
@@ -211,3 +211,5 @@ AI-valget (frittstående Function App, uavhengig av SWA-plan) og resten av arkit
 - Azure Functions HTTP 230s-grense (Microsoft Q&A) — https://learn.microsoft.com/en-us/answers/questions/1332955/
 - Oryx pnpm-støtte (åpne feature-requests) — https://github.com/microsoft/Oryx/issues/1150 og https://github.com/microsoft/Oryx/issues/2340
 - pnpm + Azure Functions symlink/deploy-problem — https://github.com/Azure/functions-action/discussions/172 og https://github.com/pnpm/pnpm/issues/6259
+- Støttede språk/runtimes i SWA (apiRuntime-verdier, node:20/node:22) — https://learn.microsoft.com/en-us/azure/static-web-apps/languages-runtimes
+- Node.js-referanse for Azure Functions (v4-runtime, Node 22/24) — https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node

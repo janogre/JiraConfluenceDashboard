@@ -6,13 +6,13 @@
 
 **Architecture:** Ett nytt npm-prosjekt under `api/` bruker Azure Functions Node v4-programmeringsmodell. All ren logikk (kryptering, OAuth-hjelpere, auth-resolusjon, proxy-videresending, BC-dispatch) legges i `api/src/lib/` uten `@azure/functions`-import, slik at den kan enhetstestes med Nodes innebygde `node:test`. Tynne funksjonsomslag i `api/src/functions/` binder logikken til HTTP-ruter under `/api`. Session lagres som en AES-256-GCM-kryptert `httpOnly`-cookie; ingen server-side sesjonslager.
 
-**Tech Stack:** Node 20 (ESM), `@azure/functions` v4, Azure Functions Core Tools v4 (`func`), `node:test` + `node:assert` (ingen ekstra test-avhengighet), `node:crypto`.
+**Tech Stack:** Node 22 (ESM), `@azure/functions` v4, Azure Functions Core Tools v4 (`func`), `node:test` + `node:assert` (ingen ekstra test-avhengighet), `node:crypto`.
 
 **Referansespec:** `docs/superpowers/specs/2026-07-14-azure-swa-functions-migrering-design.md` (§4 arkitektur, §5 auth/session, §6 managed functions, §8d apikey-reserve).
 
 ## Global Constraints
 
-- **Runtime:** Node 20, ESM (`"type": "module"` i `api/package.json`). Ingen TypeScript i `api/` — ren JS.
+- **Runtime:** Node 22, ESM (`"type": "module"` i `api/package.json`). Ingen TypeScript i `api/` — ren JS. (SWA managed functions støtter `apiRuntime` opp til `node:22`; ikke `node:24`.)
 - **Pakkeverktøy:** npm (ikke pnpm). Ref. spec §2.
 - **Funksjonsmodell:** `@azure/functions` v4. Alle funksjoner registreres med `app.http(...)` og `authLevel: 'anonymous'` (SWA managed functions bruker ikke funksjonsnøkler for auth).
 - **Rute-prefiks:** Standard `routePrefix` = `api` beholdes (settes ikke i `host.json`). En funksjon med `route: 'auth/me'` nås derfor på `/api/auth/me`.
@@ -68,46 +68,51 @@ api/
 
 ---
 
-## Task 0: Verktøykjede — Node 20 og Azure Functions Core Tools v4
+## Task 0: Verktøykjede — Node 22 og Azure Functions Core Tools v4
 
 **Files:** ingen (lokal verktøyinstallasjon; ingenting sjekkes inn).
 
 **Interfaces:**
 - Consumes: ingenting.
-- Produces: fungerende `node` (v20) og `func` (v4) på PATH — som alle senere tasks bruker til `func start`.
+- Produces: aktiv `node` v22 og `func` v4 på PATH — som alle senere tasks bruker til `func start`.
 
-*Merk:* Dette er global verktøyinstallasjon på utviklermaskinen. Den kan kreve rettigheter og at et nytt terminalvindu åpnes etterpå for at PATH skal oppdateres. På Windows finnes flere installasjonsveier — velg én.
+*Merk:* SWA managed functions støtter `apiRuntime` opp til `node:22` (ikke `node:24`), så vi kjører Node 22 lokalt for at `func start` skal matche Azure-målet. Maskinen kan ha en annen Node-versjon (f.eks. 24) installert; bruk en versjonsmanager for å aktivere 22 uten å fjerne den andre. Global verktøyinstallasjon kan kreve rettigheter og at et nytt terminalvindu åpnes for at PATH skal oppdateres.
 
-- [ ] **Step 1: Verifiser Node 20**
+- [ ] **Step 1: Sjekk aktiv Node-versjon**
 
 Run: `node -v`
-Expected: `v20.x` (eller nyere 20+). Er versjonen eldre, installer Node 20 LTS (https://nodejs.org, eller `winget install OpenJS.NodeJS.LTS`) før du går videre.
+Expected: `v22.x` → hopp til Step 3. Er det en annen versjon, fortsett til Step 2.
 
-- [ ] **Step 2: Sjekk om `func` allerede er installert**
+- [ ] **Step 2: Aktiver Node 22 via nvm-windows**
+
+Har du ikke nvm-windows fra før:
+```powershell
+winget install CoreyButler.NVMforWindows
+```
+(åpne et nytt terminalvindu etterpå). Deretter:
+```powershell
+nvm install 22
+nvm use 22
+```
+Verifiser: `node -v` → `v22.x`.
+
+- [ ] **Step 3: Sjekk om `func` allerede er installert (under aktiv Node)**
 
 Run: `func --version`
-Expected: enten `4.x` (da er verktøyet på plass — hopp til Step 4), eller en «command not found»/«ikke gjenkjent»-feil (fortsett til Step 3).
+Expected: enten `4.x` (hopp til Step 5), eller «command not found»/«ikke gjenkjent» (fortsett til Step 4).
 
-- [ ] **Step 3: Installer Azure Functions Core Tools v4**
+- [ ] **Step 4: Installer Azure Functions Core Tools v4**
 
-Velg én metode. Primær (kryssplattform, via npm):
+Med Node 22 aktiv, primær metode (via npm):
 ```bash
 npm i -g azure-functions-core-tools@4 --unsafe-perm true
 ```
-Windows-alternativ (winget):
-```powershell
-winget install Microsoft.Azure.FunctionsCoreTools
-```
-Windows-alternativ (Chocolatey):
-```powershell
-choco install azure-functions-core-tools
-```
-Åpne et nytt terminalvindu etter installasjon hvis `func` ikke gjenkjennes umiddelbart (PATH oppdateres først i nye skall).
+Windows-alternativ (winget): `winget install Microsoft.Azure.FunctionsCoreTools`
+Åpne nytt terminalvindu hvis `func` ikke gjenkjennes umiddelbart.
 
-- [ ] **Step 4: Verifiser at `func` v4 er tilgjengelig**
+- [ ] **Step 5: Verifiser verktøykjeden**
 
-Run: `func --version`
-Expected: `4.x` (f.eks. `4.0.x`).
+Run: `node -v` → `v22.x` og `func --version` → `4.x`.
 
 Ingen commit — ingen fil endret i denne tasken.
 
@@ -129,7 +134,7 @@ Ingen commit — ingen fil endret i denne tasken.
 - Consumes: ingenting.
 - Produces: kjørbart Functions-prosjekt (`func start` → `http://localhost:7071/api/*`) og `npm test`-kommando (`node --test`) som senere tasks henger tester på.
 
-**Forutsetning:** Task 0 fullført (Node 20 + `func` v4 tilgjengelig på PATH).
+**Forutsetning:** Task 0 fullført (Node 22 + `func` v4 tilgjengelig på PATH).
 
 - [ ] **Step 1: Opprett `api/package.json`**
 
@@ -139,7 +144,7 @@ Ingen commit — ingen fil endret i denne tasken.
   "version": "1.0.0",
   "type": "module",
   "main": "src/functions/*.js",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
     "start": "func start",
     "test": "node --test"
@@ -245,7 +250,7 @@ Erstatter `server/proxy.js` + `server/businessCentral/` i produksjon på Azure S
 
 ## Kjøre lokalt
 
-Krever Node 20 og Azure Functions Core Tools v4 (`func --version` → 4.x).
+Krever Node 22 og Azure Functions Core Tools v4 (`func --version` → 4.x).
 
 ```bash
 cd api
