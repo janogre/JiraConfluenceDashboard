@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { Save, Check, AlertCircle, LogOut } from 'lucide-react';
-import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardContent, Button, Input } from '../../components/common';
 import { getApiConfig, saveApiKeyToProxy } from '../../services/api';
@@ -15,7 +14,7 @@ import styles from './Settings.module.css';
 function getInitialConfig(): ApiConfig {
   const existingConfig = getApiConfig();
   if (existingConfig) return existingConfig;
-  return { jiraBaseUrl: '', confluenceBaseUrl: '', email: '', apiToken: '', anthropicApiKey: '' };
+  return { jiraBaseUrl: '', confluenceBaseUrl: '', email: '', apiToken: '' };
 }
 
 export function Settings() {
@@ -23,8 +22,6 @@ export function Settings() {
   const [config, setConfig] = useState<ApiConfig>(getInitialConfig);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [anthropicSaved, setAnthropicSaved] = useState(false);
 
   const handleChange = (field: keyof ApiConfig, value: string) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
@@ -41,13 +38,6 @@ export function Settings() {
     await saveApiKeyToProxy(configToSave);
     setSaved(true);
     setError(null);
-  };
-
-  const handleSaveAnthropicKey = async () => {
-    if (!anthropicKey) return;
-    await axios.post('/auth/set-anthropic-key', { apiKey: anthropicKey }, { withCredentials: true });
-    setAnthropicSaved(true);
-    setTimeout(() => setAnthropicSaved(false), 2000);
   };
 
   const configured = authMode === 'oauth' || !!(config.jiraBaseUrl && config.email && config.apiToken);
@@ -127,22 +117,6 @@ export function Settings() {
                 </div>
               )}
 
-              <div>
-                <label className={styles.fieldLabel}>Anthropic API-nøkkel (valgfri)</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    className={styles.inputRaw}
-                    type="password"
-                    placeholder="sk-ant-…"
-                    value={anthropicKey}
-                    onChange={(e) => { setAnthropicKey(e.target.value); setAnthropicSaved(false); }}
-                  />
-                  <Button onClick={handleSaveAnthropicKey} icon={anthropicSaved ? <Check size={14} /> : <Save size={14} />}>
-                    {anthropicSaved ? 'Lagret' : 'Lagre'}
-                  </Button>
-                </div>
-              </div>
-
               <Button
                 onClick={logout}
                 icon={<LogOut size={16} />}
@@ -177,7 +151,6 @@ export function Settings() {
                 <Input label="Confluence Base URL (valgfri)" placeholder="https://din-domene.atlassian.net" value={config.confluenceBaseUrl} onChange={(e) => handleChange('confluenceBaseUrl', e.target.value)} />
                 <Input label="E-post *" type="email" placeholder="din-epost@selskap.no" value={config.email} onChange={(e) => handleChange('email', e.target.value)} />
                 <Input label="API-token *" type="password" placeholder="Ditt Jira/Confluence API-token" value={config.apiToken} onChange={(e) => handleChange('apiToken', e.target.value)} />
-                <Input label="Anthropic API-nøkkel (valgfri)" type="password" placeholder="sk-ant-..." value={config.anthropicApiKey ?? ''} onChange={(e) => handleChange('anthropicApiKey', e.target.value)} />
                 <Button onClick={handleSave} icon={<Save size={16} />}>Lagre konfigurasjon</Button>
               </div>
               <div className={styles.help}>

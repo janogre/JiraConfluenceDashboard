@@ -107,11 +107,6 @@ export function isConfigured(): boolean {
   return getApiConfig() !== null;
 }
 
-export function getAnthropicKey(): string | null {
-  const config = getApiConfig();
-  return config?.anthropicApiKey ?? null;
-}
-
 export function getConfig(): ApiConfig | null {
   return getApiConfig();
 }

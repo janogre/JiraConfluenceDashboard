@@ -9,7 +9,7 @@ export function Login() {
   const { loginWithApiKey } = useAuthStore();
   const [visModus, setVisModus] = useState<'valg' | 'apikey'>('valg');
   const [config, setConfig] = useState<ApiConfig>(() =>
-    getApiConfig() ?? { jiraBaseUrl: '', confluenceBaseUrl: '', email: '', apiToken: '', anthropicApiKey: '' }
+    getApiConfig() ?? { jiraBaseUrl: '', confluenceBaseUrl: '', email: '', apiToken: '' }
   );
   const [feil, setFeil] = useState<string | null>(null);
   const [laster, setLaster] = useState(false);
@@ -115,17 +115,6 @@ export function Login() {
                 placeholder="Atlassian API-token"
                 value={config.apiToken}
                 onChange={(e) => setConfig((p) => ({ ...p, apiToken: e.target.value }))}
-              />
-            </label>
-
-            <label className={styles.label}>
-              Anthropic API-nøkkel (valgfri)
-              <input
-                className={styles.input}
-                type="password"
-                placeholder="sk-ant-..."
-                value={config.anthropicApiKey ?? ''}
-                onChange={(e) => setConfig((p) => ({ ...p, anthropicApiKey: e.target.value }))}
               />
             </label>
 
