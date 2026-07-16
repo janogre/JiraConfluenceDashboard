@@ -13,14 +13,15 @@ All code comments, commit messages, UI text, and AI prompts are written in **Nor
 ## Commands
 
 ```bash
-# Development - starts both proxy server and Vite dev server
+# Development - starter AI-funcen (ai-api på port 7072) og SWA CLI
+# (Vite dev server + managed functions i api/, samlet på http://localhost:4280)
 npm start
 
-# Run only the Vite dev server (port 5173)
+# Run only the Vite dev server (port 5173, uten SWA CLI / functions)
 npm run dev
 
-# Run only the proxy server (port 3001)
-npm run proxy
+# Run only AI Function App-en lokalt (port 7072)
+npm run dev:ai
 
 # Build for production (runs tsc -b first)
 npm run build
@@ -32,20 +33,22 @@ npm run lint
 npm run preview
 ```
 
+**NB:** Lokal `swa start` (kjørt via `npm start`/`npm run swa`) krever **Node 20 eller 22** — SWA CLI sin innebygde Core Tools avviser Node 24. `api/` og `ai-api/` kan derimot kjøre uavhengig på Node 24 via `func start` i hver katalog.
+
 ## Architecture
 
-### Proxy Server Pattern
-All Atlassian API requests go through a local Express proxy server (`server/proxy.js` on port 3001) to avoid CORS issues. The Axios instance in `src/services/api.ts` intercepts requests: any URL starting with `http` gets its URL moved to the `X-Target-URL` header and the request is rerouted to `/api/atlassian/proxy`. Auth is Basic (email:apiToken, base64-encoded).
+### Managed Functions (Atlassian-proxy, auth, Business Central)
+Backend for Atlassian-integrasjonen, autentisering og Business Central kjører som managed Azure Functions under Static Web Apps-appen sin `/api`-rute (kildekode i `api/`). Axios-instansen i `src/services/api.ts` intercepter requests: enhver URL som starter med `http` får URL-en flyttet til `X-Target-URL`-headeren og rerutes til `/api/atlassian/proxy`. Auth er Basic (email:apiToken, base64-encodet) eller OAuth. OAuth/innlogging bruker en stateless, kryptert cookie-session (AES-256-GCM) — ingen serverside sesjonslagring. Business Central-endepunktene ligger under samme `/api`-rute.
 
-### AI Endpoints (proxy server)
-The proxy also serves AI endpoints that call Anthropic's API (Claude Sonnet 4.6):
+### AI Function App
+AI-endepunktene som kaller Anthropics API (Claude Sonnet 4.6) kjører i en egen, frittstående Function App (kildekode i `ai-api/`), adskilt fra SWA-appens managed functions. Frontend kaller den via `VITE_AI_API_BASE` (+ `x-functions-key`):
 - `POST /api/ai/digest` — daily Jira activity summary
 - `POST /api/ai/timeline-report` — project status report from timeline issues
 - `POST /api/ai/rewrite-meeting` — rewrite meeting notes to structured minutes
 - `POST /api/ai/project-documents` — generate project documents (mandate, needs analysis, risk, etc.)
 - `POST /api/ai/suggest-subtasks` — suggest Jira subtasks/tasks for a project
 
-All AI endpoints expect `apiKey` (Anthropic key) in the request body.
+Anthropic-nøkkelen (`ANTHROPIC_API_KEY`) ligger server-side som app setting på AI Function App-en — den sendes ikke fra klienten lenger.
 
 ### Routing
 Single-level flat routes under `<Layout />` in `App.tsx`:
