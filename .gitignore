@@ -35,3 +35,7 @@ dist-ssr
 # Azure Functions (api/)
 api/node_modules/
 api/local.settings.json
+
+# AI Function App (ai-api/)
+ai-api/node_modules/
+ai-api/local.settings.json
