@@ -15,7 +15,7 @@ export function Login() {
   const [laster, setLaster] = useState(false);
 
   const handleOAuth = () => {
-    window.location.href = '/auth/atlassian';
+    window.location.href = '/api/auth/atlassian';
   };
 
   const handleApiKeyLogin = async () => {

@@ -55,20 +55,20 @@ export async function getAuthStatus(): Promise<{
   jiraBaseUrl?: string;
   confluenceBaseUrl?: string;
 }> {
-  const resp = await axios.get('/auth/me', { withCredentials: true });
+  const resp = await axios.get('/api/auth/me', { withCredentials: true });
   return resp.data;
 }
 
 // Lagre API-nøkkel-credentials i proxy-session + localStorage (for URL-oppslag)
 export async function saveApiKeyToProxy(config: ApiConfig): Promise<void> {
-  await axios.post('/auth/apikey', config, { withCredentials: true });
+  await axios.post('/api/auth/apikey', config, { withCredentials: true });
   saveApiConfig(config);
   apiInstance = null;
 }
 
 // Logg ut
 export async function logout(): Promise<void> {
-  await axios.post('/auth/logout', {}, { withCredentials: true });
+  await axios.post('/api/auth/logout', {}, { withCredentials: true });
   localStorage.removeItem('jira-confluence-config');
   currentConfig = null;
   apiInstance = null;
