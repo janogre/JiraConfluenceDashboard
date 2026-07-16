@@ -37,18 +37,18 @@ Regler for innholdet:
     const userMessage = `Generer følgende prosjektdokumenter: ${docList}.
 
 Prosjektinformasjon:
-- Navn: ${projectInfo.name}
-- Ansvarlig: ${projectInfo.owner || '(ikke oppgitt)'}
-- Beskrivelse: ${projectInfo.description || '(ikke oppgitt)'}
+- Navn: ${projectInfo?.name}
+- Ansvarlig: ${projectInfo?.owner || '(ikke oppgitt)'}
+- Beskrivelse: ${projectInfo?.description || '(ikke oppgitt)'}
 
 Tilleggsinformasjon:
-- Formål / problem: ${additionalInfo.purpose || '(ikke oppgitt)'}
-- Ønsket resultat / mål: ${additionalInfo.goals || '(ikke oppgitt)'}
-- Frist: ${additionalInfo.deadline || '(ikke oppgitt)'}
-- Varighet: ${additionalInfo.duration || '(ikke oppgitt)'}
-- Budsjett: ${additionalInfo.budget || '(ikke oppgitt)'}
-- Interessenter: ${additionalInfo.stakeholders || '(ikke oppgitt)'}
-- Kjente risikoer: ${additionalInfo.risks || '(ikke oppgitt)'}
+- Formål / problem: ${additionalInfo?.purpose || '(ikke oppgitt)'}
+- Ønsket resultat / mål: ${additionalInfo?.goals || '(ikke oppgitt)'}
+- Frist: ${additionalInfo?.deadline || '(ikke oppgitt)'}
+- Varighet: ${additionalInfo?.duration || '(ikke oppgitt)'}
+- Budsjett: ${additionalInfo?.budget || '(ikke oppgitt)'}
+- Interessenter: ${additionalInfo?.stakeholders || '(ikke oppgitt)'}
+- Kjente risikoer: ${additionalInfo?.risks || '(ikke oppgitt)'}
 
 Dokumentnøkler som skal genereres: ${documents.join(', ')}
 
