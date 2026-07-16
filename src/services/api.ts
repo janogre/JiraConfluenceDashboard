@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { ApiConfig } from '../types';
 
-// Relativ URL — tunneles via Vite-proxy lokalt, og direkte i produksjon (samme domene)
+// Relativ URL — tunneles via SWA CLI lokalt (/api → managed functions), og direkte i produksjon (samme domene)
 const PROXY_URL = '';
 
 let apiInstance: AxiosInstance | null = null;
