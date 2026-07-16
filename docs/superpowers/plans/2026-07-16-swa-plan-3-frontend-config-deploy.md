@@ -454,7 +454,7 @@ git commit -m "Legg til CI/CD-workflows for SWA og AI Function App"
 
 ## Task 6: Opprydding — fjern Express-serveren og utdaterte avhengigheter
 
-**Files:** Delete `server/`; Modify `package.json`
+**Files:** Delete `server/`; Modify `package.json`, `.env.example`, `CLAUDE.md`
 
 **Forutsetning:** Task 1–4 er verifisert (frontend kjører mot Azure-backendene lokalt via SWA CLI). `server/proxy.js` og `server/businessCentral/` er nå fullstendig erstattet av `api/` + `ai-api/`.
 
@@ -472,19 +472,29 @@ Vurder `concurrently` (devDependencies): fortsatt brukt av det nye `start`-scrip
 
 Kjør `npm install` for å oppdatere `package-lock.json`.
 
-- [ ] **Step 3: Verifiser at frontend fortsatt bygger og at ingenting refererer server/**
+- [ ] **Step 3: Rydd rot-`.env.example` (fjern backend-vars, behold kun VITE)**
+
+Rot-`.env.example` dokumenterte `server/proxy.js` sine env-vars (`ATLASSIAN_*`, `ANTHROPIC_API_KEY`, `BC_*`). Disse hører nå hjemme i `api/local.settings.json` / `ai-api/local.settings.json` og de respektive Azure app settings. Fjern alle backend-vars fra rot-`.env.example` slik at den KUN dokumenterer frontend-variablene `VITE_AI_API_BASE` og `VITE_AI_FUNCTION_KEY`.
+
+- [ ] **Step 4: Oppdater `CLAUDE.md` til SWA + Functions-arkitektur**
+
+- **Commands-seksjonen:** `npm start` starter nå SWA CLI + AI-func (ikke `proxy` + `vite`). Oppdater kommando-listen. Legg til at lokal `swa start` krever **Node 20/22** (SWA CLI sin innbygde Core Tools avviser Node 24; `api/` + `ai-api/` func kjører på Node 24 hver for seg via `npm test`/`func start`).
+- **Architecture-seksjonen:** «Proxy Server Pattern» (Express `server/proxy.js` på port 3001) og «AI Endpoints (proxy server)» beskriver en fjernet arkitektur. Erstatt med: managed functions under SWA `/api` (`api/`) for Atlassian-proxy/auth/BC (kryptert cookie-session), og en frittstående AI Function App (`ai-api/`) for AI-endepunktene med server-side Anthropic-nøkkel.
+
+- [ ] **Step 5: Verifiser at frontend bygger og at ingenting refererer server/**
 
 ```bash
 grep -rn "server/proxy\|businessCentral\|localhost:3001" src/   # Expected: ingen treff
+grep -rnE "express|session-file-store|http-proxy-middleware" package.json   # Expected: ingen treff (deps fjernet)
 npm install && npm run build   # Expected: OK
 ```
-Start løpet på nytt (`npm start`) og gjør en rask røyktest av at frontend fortsatt betjener `/api/*` og AI-kallene (samme som Task 4 Step 7).
+(Integrert `swa start`-røyktest krever Node 20/22 lokalt — kjøres av mennesket ved behov; her holder build + grep.)
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add server package.json package-lock.json
-git commit -m "Fjern Express-server og utdaterte avhengigheter (erstattet av api/ + ai-api/)"
+git add server package.json package-lock.json .env.example CLAUDE.md
+git commit -m "Fjern Express-server + utdaterte deps; oppdater .env.example og CLAUDE.md til SWA-arkitektur"
 ```
 
 ---
