@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "func start --script-root api --port 7071",
     "dev:ai": "func start --script-root ai-api --port 7072",
     "swa": "swa start http://localhost:5173 --run \"npm run dev\" --api-location api",
     "start": "concurrently \"npm run dev:ai\" \"npm run swa\"",
+    "local": "concurrently \"npm run dev:api\" \"npm run dev:ai\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
