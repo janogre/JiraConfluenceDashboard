@@ -295,7 +295,7 @@ export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps)
                 {issue.labels && issue.labels.length > 0 && (
                   <div className={styles.labels}>
                     {issue.labels.slice(0, 2).map((label) => (
-                      <span key={label} className={styles.label}>{label}</span>
+                      <span key={label} className={styles.label} title={label}>{label}</span>
                     ))}
                     {issue.labels.length > 2 && (
                       <span className={styles.labelMore}>+{issue.labels.length - 2}</span>
