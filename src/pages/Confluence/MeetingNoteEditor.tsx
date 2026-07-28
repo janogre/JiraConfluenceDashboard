@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { getChildPages, findPageByTitle, createPage, searchUsers } from '../../services/confluenceService';
 import type { ConfluenceUserResult } from '../../services/confluenceService';
-import { getAnthropicKey } from '../../services/api';
+import { aiFetch } from '../../services/aiApi';
 import type { ConfluenceSpace, ConfluencePage } from '../../types';
 import styles from './Confluence.module.css';
 
@@ -445,17 +445,6 @@ export function MeetingNoteEditor({ space }: MeetingNoteEditorProps) {
   const [rewriteError, setRewriteError] = useState('');
   const [publishError, setPublishError] = useState('');
 
-  const [anthropicKey, setAnthropicKey] = useState(() => getAnthropicKey());
-
-  // Oppdater nøkkelen hvis brukeren lagrer Settings mens komponenten er montert
-  useEffect(() => {
-    const onStorage = () => setAnthropicKey(getAnthropicKey());
-    window.addEventListener('storage', onStorage);
-    // Les også ved mount i tilfelle den var oppdatert uten storage-event
-    setAnthropicKey(getAnthropicKey());
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
   const { data: meetingParent } = useQuery({
     queryKey: ['confluenceMeetingParent', space.key],
     queryFn: () => findPageByTitle('Møtenotater', space.key),
@@ -488,13 +477,7 @@ export function MeetingNoteEditor({ space }: MeetingNoteEditorProps) {
 
   const rewriteMutation = useMutation({
     mutationFn: async () => {
-      const key = getAnthropicKey();
-      if (!key) throw new Error('Anthropic API-nøkkel mangler – legg den inn under Innstillinger.');
-      const response = await fetch('http://localhost:3001/api/ai/rewrite-meeting', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, attendees: attendees.join(', '), context, apiKey: anthropicKey }),
-      });
+      const response = await aiFetch('rewrite-meeting', { notes, attendees: attendees.join(', '), context });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Klarte ikke renskrive notater');
       if (data.content?.[0]?.text) return data.content[0].text as string;

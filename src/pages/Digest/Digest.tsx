@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, Button, LoadingSpinner } from '../../components/common';
 import { getIssues, getMyIssues } from '../../services/jiraService';
-import { isConfigured, getAnthropicKey } from '../../services/api';
+import { isConfigured } from '../../services/api';
+import { aiFetch } from '../../services/aiApi';
 import type { JiraIssue } from '../../types';
 import styles from './Digest.module.css';
 
@@ -143,7 +144,6 @@ export function Digest() {
   const [copied, setCopied] = useState(false);
 
   const configured = isConfigured();
-  const anthropicKey = getAnthropicKey();
 
   const daysBack = 7 + weekOffset * 7;
   const daysEnd = weekOffset * 7;
@@ -178,21 +178,13 @@ export function Digest() {
   const sections = digest ? parseSections(digest) : [];
 
   const handleGenerate = async () => {
-    if (!anthropicKey) {
-      setError('Anthropic API-nøkkel mangler. Legg inn nøkkel under Settings.');
-      return;
-    }
     setGenerating(true);
     setError(null);
     setDigest(null);
 
     const prompt = buildPrompt(done, [...active, ...allActive.slice(0, 20)], blocked, weekLabel);
     try {
-      const res = await fetch('http://localhost:3001/api/ai/digest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: anthropicKey, messages: [{ role: 'user', content: prompt }] }),
-      });
+      const res = await aiFetch('digest', { messages: [{ role: 'user', content: prompt }] });
       const data = await res.json();
       if (data.error) {
         setError(`Feil fra Anthropic: ${data.error.message ?? JSON.stringify(data.error)}`);
@@ -283,12 +275,6 @@ export function Digest() {
           </>
         )}
       </div>
-
-      {!anthropicKey && (
-        <div className={styles.warning}>
-          Anthropic API-nøkkel er ikke konfigurert. Gå til Settings for å legge den inn.
-        </div>
-      )}
 
       {error && <div className={styles.error}>{error}</div>}
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, FileDown, Copy, Check, RefreshCw, Loader2 } from 'lucide-react';
-import { getAnthropicKey } from '../../services/api';
+import { aiFetch } from '../../services/aiApi';
 import type { JiraIssue } from '../../types';
 import styles from './TimelineReport.module.css';
 
@@ -61,31 +61,21 @@ export function TimelineReport({ issues, onClose }: TimelineReportProps) {
   const summary = computeSummary(issues);
 
   const generate = useCallback(async () => {
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setError('Anthropic API-nøkkel mangler – legg den inn under Innstillinger.');
-      return;
-    }
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:3001/api/ai/timeline-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          reportDate,
-          issues: issues.map((i) => ({
-            key: i.key,
-            summary: i.summary,
-            issueType: { name: i.issueType.name },
-            status: { name: i.status.name, category: i.status.category },
-            priority: i.priority ? { name: i.priority.name } : undefined,
-            assignee: i.assignee ? { displayName: i.assignee.displayName } : undefined,
-            startDate: i.startDate,
-            dueDate: i.dueDate,
-          })),
-        }),
+      const res = await aiFetch('timeline-report', {
+        reportDate,
+        issues: issues.map((i) => ({
+          key: i.key,
+          summary: i.summary,
+          issueType: { name: i.issueType.name },
+          status: { name: i.status.name, category: i.status.category },
+          priority: i.priority ? { name: i.priority.name } : undefined,
+          assignee: i.assignee ? { displayName: i.assignee.displayName } : undefined,
+          startDate: i.startDate,
+          dueDate: i.dueDate,
+        })),
       });
       const data = await res.json();
       if (data.error) {

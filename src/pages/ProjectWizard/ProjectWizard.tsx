@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, ChevronDown, ChevronRight, Briefcase, Layers } from 'lucide-react';
 import { getSpaces, getSpaceHomePage, getChildPages, createPage } from '../../services/confluenceService';
 import type { ConfluencePage } from '../../types';
-import { getAnthropicKey } from '../../services/api';
+import { aiFetch } from '../../services/aiApi';
 import { getProjects, createIssue, createRemoteLink, searchJiraUsers } from '../../services/jiraService';
 import type { JiraUser } from '../../types';
 import { Button } from '../../components/common/Button';
@@ -466,23 +466,13 @@ export function ProjectWizard() {
   // ── AI: suggest subtasks ──
 
   async function handleSuggestSubtasks(forType: 'type1' | 'type2') {
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      const msg = 'Mangler Anthropic API-nøkkel. Legg den til under Innstillinger.';
-      if (forType === 'type1') setSubtaskError(msg);
-      else setTaskSuggestError(msg);
-      return;
-    }
-
     const body =
       forType === 'type1'
         ? {
-            apiKey,
             projectType: 'type1',
             projectInfo: { name: taskInfo.name, description: taskInfo.description },
           }
         : {
-            apiKey,
             projectType: 'type2',
             projectInfo: { name: projectInfo.name, description: projectInfo.description },
             additionalInfo: {
@@ -501,11 +491,7 @@ export function ProjectWizard() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/ai/suggest-subtasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const response = await aiFetch('suggest-subtasks', body);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI-feil');
 
@@ -571,30 +557,19 @@ export function ProjectWizard() {
   // ── Type 2: generate docs ──
 
   async function handleGenerate() {
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setGenerateError('Mangler Anthropic API-nøkkel. Legg den til under Innstillinger.');
-      return;
-    }
-
     setGenerating(true);
     setGenerateError('');
     setGeneratedDocs([]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/ai/project-documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          documents: selectedDocs,
-          projectInfo: {
-            name: projectInfo.name,
-            owner: projectInfo.owner,
-            description: projectInfo.description,
-          },
-          additionalInfo,
-        }),
+      const response = await aiFetch('project-documents', {
+        documents: selectedDocs,
+        projectInfo: {
+          name: projectInfo.name,
+          owner: projectInfo.owner,
+          description: projectInfo.description,
+        },
+        additionalInfo,
       });
 
       const data = await response.json();

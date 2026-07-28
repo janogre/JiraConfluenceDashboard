@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles, Plus, X, Check, ExternalLink, Loader2, Info, ListTree, AlertCircle, HelpCircle, PenLine, RotateCcw } from 'lucide-react';
 import { getProjects, getCurrentUser, searchJiraUsers, createIssue } from '../../services/jiraService';
-import { getAnthropicKey } from '../../services/api';
+import { aiFetch } from '../../services/aiApi';
 import { Button } from '../../components/common';
 import type { JiraUser } from '../../types';
 import {
@@ -320,11 +320,6 @@ export function NySak() {
   }
 
   async function handleForeslaa() {
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setClassifyError('Mangler Anthropic API-nøkkel. Legg den til under Innstillinger.');
-      return;
-    }
     if (!fritekst.trim()) {
       setClassifyError('Skriv en kort beskrivelse først.');
       return;
@@ -333,11 +328,7 @@ export function NySak() {
     setClassifyError('');
     setBegrunnelse('');
     try {
-      const response = await fetch('http://localhost:3001/api/ai/classify-issue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, text: fritekst, allowed: byggTillatteVerdier() }),
-      });
+      const response = await aiFetch('classify-issue', { text: fritekst, allowed: byggTillatteVerdier() });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI-feil');
       brukForslag(data as ForslagSvar);
@@ -354,11 +345,6 @@ export function NySak() {
 
   // Valgfri AI-omskriving av beskrivelsen (kjøres kun når brukeren trykker).
   async function handleSkrivOm() {
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setSkrivOmError('Mangler Anthropic API-nøkkel. Legg den til under Innstillinger.');
-      return;
-    }
     if (!fritekst.trim()) {
       setSkrivOmError('Skriv en beskrivelse først.');
       return;
@@ -366,11 +352,7 @@ export function NySak() {
     setSkrivOm(true);
     setSkrivOmError('');
     try {
-      const response = await fetch('http://localhost:3001/api/ai/rewrite-description', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, text: fritekst, arbeidstype }),
-      });
+      const response = await aiFetch('rewrite-description', { text: fritekst, arbeidstype });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI-feil');
       const ny = String(data.beskrivelse ?? '').trim();

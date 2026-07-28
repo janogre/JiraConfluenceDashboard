@@ -255,7 +255,6 @@ export interface ApiConfig {
   confluenceBaseUrl: string;
   email: string;
   apiToken: string;
-  anthropicApiKey?: string;
 }
 
 // Business Central – Lager

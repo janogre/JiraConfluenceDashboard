@@ -1,0 +1,26 @@
+name: AI Function App CI/CD
+
+on:
+  push:
+    branches: [master]
+    paths: [ 'ai-api/**' ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy AI Function App
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sett opp Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installer avhengigheter
+        run: npm ci
+        working-directory: ai-api
+      - name: Deploy til Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ secrets.AI_FUNCTION_APP_NAME }}
+          package: ai-api
+          publish-profile: ${{ secrets.AI_FUNCTION_APP_PUBLISH_PROFILE }}
