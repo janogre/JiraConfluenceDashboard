@@ -404,9 +404,10 @@
   font-size: var(--font-size-sm);
 }
 
-/* 11-kolonne grid for TeamIssueList (legger til Kategori-kolonne) */
+/* 12-kolonne grid for TeamIssueList (legger til Komponent- og Kategori-kolonne).
+   Komponent/Kategori er brede nok til at vanlige verdier får plass; lange forkortes med ellipsis. */
 .teamIssueTable {
-  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 120px 100px 1fr 88px 36px !important;
+  grid-template-columns: 28px 96px 1fr 120px 90px 160px 88px 150px 130px 1fr 88px 36px !important;
 }
 
 /* Enkeltceller i barne-rader — display:contents på rad-wrapper gir eksakt kolonnejustering */
@@ -415,6 +416,8 @@
   align-items: center;
   padding: 5px var(--spacing-sm);
   min-height: 36px;
+  min-width: 0;
+  overflow: hidden;
   background: color-mix(in srgb, var(--color-bg-secondary) 60%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
   cursor: pointer;

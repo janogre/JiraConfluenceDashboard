@@ -59,7 +59,7 @@ Veiledet oppretting av oppgave eller prosjekt i to varianter:
    - Remote link fra Jira-saken til Confluence-mappen
 
 ### Innstillinger
-Konfigurasjon av Jira-URL, Confluence-URL, API-token og Anthropic API-nøkkel.
+Konfigurasjon av Jira-URL, Confluence-URL og API-token for Atlassian apikey-innlogging.
 
 ---
 
@@ -73,9 +73,10 @@ Konfigurasjon av Jira-URL, Confluence-URL, API-token og Anthropic API-nøkkel.
 | TanStack Query | Server-state (Jira/Confluence API) |
 | Zustand | Lokal state (Kanban, Todos) med localStorage-persistering |
 | @hello-pangea/dnd | Drag-and-drop (Kanban) |
-| Axios | HTTP-klient mot proxy |
+| Axios | HTTP-klient mot managed functions og AI Function App |
 | CSS Modules | Styling |
-| Express (proxy) | CORS-omgåelse mot Atlassian API (port 3001) |
+| Azure Functions (`api/`) | Managed functions under samme domene (`/api/*`) — Atlassian-proxy, auth (OAuth/apikey, kryptert cookie-session), Business Central |
+| Azure Functions (`ai-api/`) | Frittstående AI Function App (`/api/ai/*`) — AI-endepunkter med server-side Anthropic-nøkkel |
 | Claude Sonnet 4.6 | AI-funksjoner (dokumentgenerering, møtereferat, forslag) |
 
 ---
@@ -83,9 +84,11 @@ Konfigurasjon av Jira-URL, Confluence-URL, API-token og Anthropic API-nøkkel.
 ## Kom i gang
 
 ### Krav
-- Node.js 18+
+- Node.js 20 eller 22 for lokal `swa start` (SWA CLI sine innebygde Core Tools avviser Node 24) — `api/`- og `ai-api/`-funksjonene kan selv kjøre videre på Node 22/24
+- [Azure Static Web Apps CLI](https://www.npmjs.com/package/@azure/static-web-apps-cli) (`npm i -g @azure/static-web-apps-cli`)
+- Azure Functions Core Tools v4 (`func --version` → 4.x)
 - Jira Cloud- og/eller Confluence Cloud-konto med API-token
-- Anthropic API-nøkkel (for AI-funksjoner)
+- Anthropic API-nøkkel (settes server-side som `ANTHROPIC_API_KEY` i AI Function App-en, se Konfigurasjon)
 
 ### Installasjon
 
@@ -96,15 +99,15 @@ npm install
 ### Utvikling
 
 ```bash
-# Start både proxy-server (port 3001) og Vite dev-server (port 5173)
+# Start AI-funksjonene (ai-api, port 7072) + SWA CLI
+# (Vite dev-server + managed functions i api/, samlet på http://localhost:4280)
 npm start
 
-# Kun Vite dev-server
+# Kun Vite dev-server, uten backend
 npm run dev
-
-# Kun proxy-server
-npm run proxy
 ```
+
+> Lokal `swa start` (kjøres av `npm start`) krever Node 20 eller 22 — SWA CLI sine innebygde Core Tools avviser Node 24.
 
 ### Produksjonsbygg
 
@@ -123,7 +126,7 @@ npm run lint
 
 ## Konfigurasjon
 
-Åpne appen og gå til **Innstillinger**. Fyll inn:
+Åpne appen og gå til **Innstillinger**. Fyll inn (apikey-innlogging mot Atlassian):
 
 | Felt | Eksempel |
 |------|---------|
@@ -131,20 +134,27 @@ npm run lint
 | Confluence base URL | `https://dinorg.atlassian.net` |
 | Brukernavn | din Atlassian e-postadresse |
 | API-token | fra [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens) |
-| Anthropic API-nøkkel | fra [console.anthropic.com](https://console.anthropic.com) |
 
-Innstillingene lagres kun i nettleserens localStorage.
+Innstillingene lagres i en kryptert, stateless cookie-session (satt av `api/`) og i nettleserens localStorage for URL-oppslag.
+
+AI-funksjonene krever ingen nøkkel fra brukeren i grensesnittet — `ANTHROPIC_API_KEY` settes server-side som app-setting på AI Function App-en (`ai-api/`). Frontend trenger i tillegg build-time miljøvariablene `VITE_AI_API_BASE` (AI-appens URL) og `VITE_AI_FUNCTION_KEY` (function-key), se `.env.example`.
 
 ---
 
 ## Arkitektur
 
 ```
-Browser (localhost:5173)
-    ↓ Axios + X-Target-URL-header
-Proxy Server (localhost:3001)
+Browser (localhost:5173, via SWA CLI på :4280 i lokal dev)
+    ↓ Axios + X-Target-URL-header → /api/*
+Managed Azure Functions (api/, samme domene i prod)
     ↓
-Atlassian Cloud APIs  /  Anthropic API
+Atlassian Cloud APIs
+
+Browser
+    ↓ fetch + x-functions-key → ${VITE_AI_API_BASE}/api/ai/*
+AI Function App (ai-api/, eget origin)
+    ↓
+Anthropic API
 ```
 
 ```
@@ -161,18 +171,23 @@ src/
 │   ├── MyMetrics/
 │   ├── ProjectWizard/
 │   └── Settings/
-├── services/         # API-lag: jiraService.ts, confluenceService.ts, api.ts
+├── services/         # API-lag: jiraService.ts, confluenceService.ts, api.ts (Atlassian/auth mot api/), aiApi.ts (mot ai-api/)
 ├── store/            # Zustand-stores: kanbanStore.ts, todoStore.ts
 ├── types/            # Delte TypeScript-typer (index.ts)
 └── index.css         # Globale CSS-variabler (NEAS-tema)
 
-server/
-└── proxy.js          # Express-proxy mot Atlassian + AI-endepunkter
+api/                   # Managed Azure Functions (SWA /api)
+└── src/functions/     # Atlassian-proxy, auth (OAuth/apikey, kryptert cookie-session), Business Central
+
+ai-api/                # Frittstående AI Function App
+└── src/functions/     # AI-endepunkter (server-side ANTHROPIC_API_KEY, x-functions-key)
 ```
 
-Alle Atlassian API-kall rutes gjennom proxy-serveren via `X-Target-URL`-header for å unngå CORS-problemer.
+Alle Atlassian API-kall rutes gjennom de managed Azure Functions-ene i `api/` (samme domene, `/api/atlassian/proxy`) via en `X-Target-URL`-header, for å unngå CORS-problemer og holde innloggingen i en kryptert, stateless cookie-session.
 
-### AI-endepunkter i proxy
+### AI-endepunkter (ai-api/)
+
+Endepunktene betjenes på et eget origin (`${VITE_AI_API_BASE}/api/ai/*`) og krever en `x-functions-key`-header. Anthropic-nøkkelen er satt server-side som `ANTHROPIC_API_KEY` i AI Function App-en — ingen nøkkel sendes fra klienten.
 
 | Endepunkt | Beskrivelse |
 |-----------|-------------|

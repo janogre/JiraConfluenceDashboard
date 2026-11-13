@@ -73,13 +73,13 @@ export const useAuthStore = create<AuthState>((set, get) => {
   },
 
   selectCloud: async (cloudId: string) => {
-    await axios.post('/auth/select-cloud', { cloudId }, { withCredentials: true });
+    await axios.post('/api/auth/select-cloud', { cloudId }, { withCredentials: true });
     const cloud = get().availableClouds.find((c) => c.id === cloudId);
     set({ cloudId, cloudName: cloud?.name ?? null });
   },
 
   loginWithApiKey: async (config: ApiConfig) => {
-    await axios.post('/auth/apikey', config, { withCredentials: true });
+    await axios.post('/api/auth/apikey', config, { withCredentials: true });
     saveApiConfig(config);
     set({
       authenticated: true,

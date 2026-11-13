@@ -1,0 +1,14 @@
+{
+  "name": "jcd-ai-api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/functions/*.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "func start",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  }
+}

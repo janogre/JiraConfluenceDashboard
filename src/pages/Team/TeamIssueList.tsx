@@ -200,7 +200,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                   {issue.components && issue.components.length > 0 && (
                     <div className={listStyles.labels}>
                       {issue.components.slice(0, 2).map((c) => (
-                        <span key={c.id} className={listStyles.label}>{c.name}</span>
+                        <span key={c.id} className={listStyles.label} title={c.name}>{c.name}</span>
                       ))}
                       {issue.components.length > 2 && (
                         <span className={listStyles.labelMore}>+{issue.components.length - 2}</span>
@@ -210,14 +210,14 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                 </div>
                 <div className={listStyles.colData}>
                   {issue.kategori && (
-                    <span className={listStyles.label}>{issue.kategori}</span>
+                    <span className={listStyles.label} title={issue.kategori}>{issue.kategori}</span>
                   )}
                 </div>
                 <div className={listStyles.colData}>
                   {issue.labels && issue.labels.length > 0 && (
                     <div className={listStyles.labels}>
                       {issue.labels.slice(0, 2).map((label) => (
-                        <span key={label} className={listStyles.label}>{label}</span>
+                        <span key={label} className={listStyles.label} title={label}>{label}</span>
                       ))}
                       {issue.labels.length > 2 && (
                         <span className={listStyles.labelMore}>+{issue.labels.length - 2}</span>
@@ -305,7 +305,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                       {child.components && child.components.length > 0 && (
                         <div className={listStyles.labels}>
                           {child.components.slice(0, 2).map((c) => (
-                            <span key={c.id} className={listStyles.label}>{c.name}</span>
+                            <span key={c.id} className={listStyles.label} title={c.name}>{c.name}</span>
                           ))}
                           {child.components.length > 2 && (
                             <span className={listStyles.labelMore}>+{child.components.length - 2}</span>
@@ -316,7 +316,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                     {/* Kol 9: kategori */}
                     <div className={cc(listStyles.colData)} onClick={click}>
                       {child.kategori && (
-                        <span className={listStyles.label}>{child.kategori}</span>
+                        <span className={listStyles.label} title={child.kategori}>{child.kategori}</span>
                       )}
                     </div>
                     {/* Kol 10: etiketter */}
@@ -324,7 +324,7 @@ export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }
                       {child.labels && child.labels.length > 0 && (
                         <div className={listStyles.labels}>
                           {child.labels.slice(0, 2).map((label) => (
-                            <span key={label} className={listStyles.label}>{label}</span>
+                            <span key={label} className={listStyles.label} title={label}>{label}</span>
                           ))}
                           {child.labels.length > 2 && (
                             <span className={listStyles.labelMore}>+{child.labels.length - 2}</span>

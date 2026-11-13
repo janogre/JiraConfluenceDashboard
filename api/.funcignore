@@ -1,0 +1,5 @@
+*.test.js
+test/
+local.settings.json
+.git*
+README.md

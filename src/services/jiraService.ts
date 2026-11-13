@@ -759,7 +759,11 @@ export async function getOpprettFelter(projectKey: string, issueTypeName: string
     støtterPrioritet: false,
     prioriteter: [],
     komponenter: [],
-    kategoriFieldId: _categoryFieldKey ?? null,
+    // Uten createmeta vet vi verken felttype eller om Kategori-feltet ligger på
+    // create-skjermen. Da må vi IKKE sette det oppdagede custom-feltet med en rå
+    // verdi (gir 400 «Angi en gyldig 'id' or 'name'»); Kategori rutes i stedet til
+    // en kat:-etikett i createIssue. Ekte felt settes kun når metaOk er true.
+    kategoriFieldId: null,
     kategoriSchemaType: null,
     kategoriAllowed: null,
     støtterEtiketter: true,
@@ -781,10 +785,19 @@ export async function getOpprettFelter(projectKey: string, issueTypeName: string
         }>;
       }>;
     }>(`${baseUrl}/rest/api/3/issue/createmeta`, {
-      params: { projectKeys: projectKey, issuetypeNames: issueTypeName, expand: 'projects.issuetypes.fields' },
+      // Merk: issuetypeNames-filteret på dette (deprekerte) endepunktet siler bort
+      // alle arbeidstyper på enkelte Jira-instanser (bekreftet på neas.atlassian.net),
+      // slik at fields blir undefined og vi feilaktig havner i fallback (metaOk:false).
+      // Vi henter derfor alle arbeidstyper for prosjektet og matcher på navn selv.
+      params: { projectKeys: projectKey, expand: 'projects.issuetypes.fields' },
     });
 
-    const fields = response.data.projects?.[0]?.issuetypes?.[0]?.fields;
+    const project =
+      response.data.projects?.find((p) => p.key === projectKey) ?? response.data.projects?.[0];
+    const issuetype = project?.issuetypes?.find(
+      (it) => it.name.toLowerCase() === issueTypeName.toLowerCase()
+    );
+    const fields = issuetype?.fields;
     if (!fields) {
       _createMetaCache.set(cacheKey, fallback);
       return fallback;
