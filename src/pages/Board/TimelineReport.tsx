@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, FileDown, Copy, Check, RefreshCw, Loader2 } from 'lucide-react';
 import { aiFetch } from '../../services/aiApi';
 import type { JiraIssue } from '../../types';
+import { erForfalt } from '../../utils/jiraVisning';
 import styles from './TimelineReport.module.css';
 
 interface TimelineReportProps {
@@ -41,7 +42,7 @@ function computeSummary(issues: JiraIssue[]) {
     open:       issues.filter((i) => i.status.category === 'new').length,
     withDates:  issues.filter((i) => i.startDate || i.dueDate).length,
     overdue:    issues.filter((i) =>
-      i.dueDate && new Date(i.dueDate) < new Date() && i.status.category !== 'done'
+      erForfalt(i.dueDate, i.status.category)
     ).length,
   };
 }
@@ -232,9 +233,7 @@ export function TimelineReport({ issues, onClose }: TimelineReportProps) {
                 <tbody>
                   {issues.map((issue, idx) => {
                     const st = statusStyle(issue.status.category);
-                    const isOverdue = issue.dueDate
-                      && new Date(issue.dueDate) < new Date()
-                      && issue.status.category !== 'done';
+                    const isOverdue = erForfalt(issue.dueDate, issue.status.category);
                     return (
                       <tr key={issue.key} className={idx % 2 === 1 ? styles.rowAlt : ''}>
                         <td className={styles.keyCell}>{issue.key}</td>

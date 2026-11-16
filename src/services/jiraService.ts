@@ -35,6 +35,7 @@ interface JiraApiIssue {
       iconUrl?: string;
     };
     assignee?: {
+      accountId?: string;
       displayName: string;
       avatarUrls?: {
         '48x48'?: string;
@@ -217,6 +218,7 @@ function mapIssue(apiIssue: JiraApiIssue): JiraIssue {
       : undefined,
     assignee: apiIssue.fields.assignee
       ? {
+          accountId: apiIssue.fields.assignee.accountId,
           displayName: apiIssue.fields.assignee.displayName,
           avatarUrl: apiIssue.fields.assignee.avatarUrls?.['48x48'],
         }
@@ -508,6 +510,22 @@ export async function getChildIssues(parentKey: string): Promise<JiraIssue[]> {
 // Get issues assigned to current user
 export async function getMyIssues(): Promise<JiraIssue[]> {
   return getIssues(undefined, 'assignee = currentUser() AND resolution = EMPTY ORDER BY updated DESC');
+}
+
+// JQL-ledd for kanban: åpne saker pluss saker som ble ferdige siste 30 dager.
+// Med alleFerdige hentes alle ferdige saker også.
+function ferdigLedd(alleFerdige: boolean): string {
+  return alleFerdige ? '' : ' AND (statusCategory != Done OR statusCategoryChangedDate >= -30d)';
+}
+
+// Mine saker til kanban-boardet: alle sider, inkludert nylig ferdige.
+export async function getMyBoardIssues(alleFerdige = false): Promise<JiraIssue[]> {
+  return getIssues(undefined, `assignee = currentUser()${ferdigLedd(alleFerdige)} ORDER BY updated DESC`, true);
+}
+
+// Prosjektsaker til kanban-boardet: alle sider, inkludert nylig ferdige.
+export async function getProjectBoardIssues(projectKey: string, alleFerdige = false): Promise<JiraIssue[]> {
+  return getIssues(undefined, `project = "${projectKey}"${ferdigLedd(alleFerdige)} ORDER BY updated DESC`, true);
 }
 
 // Hent alle barn av de oppgitte foreldrenøklene (uavhengig av hvem de er tildelt)

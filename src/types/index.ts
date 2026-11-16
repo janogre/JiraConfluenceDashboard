@@ -62,6 +62,7 @@ export interface JiraIssue {
     iconUrl?: string;
   };
   assignee?: {
+    accountId?: string;
     displayName: string;
     avatarUrl?: string;
   };

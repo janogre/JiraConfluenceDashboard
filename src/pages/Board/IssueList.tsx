@@ -3,6 +3,7 @@ import { ChevronUp, ChevronDown, CheckSquare, Check, AlertOctagon } from 'lucide
 import { Badge, Modal } from '../../components/common';
 import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
+import { prioritetsNivaa, prioritetsSortering, prioritetsVariant, erForfalt } from '../../utils/jiraVisning';
 import styles from './IssueList.module.css';
 
 interface IssueListProps {
@@ -14,36 +15,18 @@ interface IssueListProps {
 type SortKey = 'key' | 'summary' | 'status' | 'priority' | 'assignee' | 'dueDate' | 'updated';
 type SortDir = 'asc' | 'desc';
 
-const PRIORITY_ORDER: Record<string, number> = {
-  Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1,
-};
 
 function getPriorityOrder(name?: string) {
-  return name ? (PRIORITY_ORDER[name] ?? 3) : 0;
+  return prioritetsSortering(name);
 }
 
-function getPriorityVariant(priority?: string) {
-  switch (priority?.toLowerCase()) {
-    case 'highest':
-    case 'high':
-      return 'danger' as const;
-    case 'medium':
-      return 'warning' as const;
-    default:
-      return 'default' as const;
-  }
-}
-
+// Jira-prioritet → prioritet på privat gjøremål.
 function mapJiraPriority(jiraPriority?: string): 'low' | 'medium' | 'high' {
-  switch (jiraPriority?.toLowerCase()) {
-    case 'highest':
-    case 'high':
-      return 'high';
-    case 'medium':
-      return 'medium';
-    default:
-      return 'low';
-  }
+  const nivaa = prioritetsNivaa(jiraPriority);
+  if (nivaa === undefined) return 'low';
+  if (nivaa >= 4) return 'high';
+  if (nivaa === 3) return 'medium';
+  return 'low';
 }
 
 interface CreateTodoModalProps {
@@ -255,7 +238,7 @@ export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps)
               </div>
               <div className={styles.colData}>
                 {issue.priority && (
-                  <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
+                  <Badge variant={prioritetsVariant(issue.priority.name)} size="sm">
                     {issue.priority.name}
                   </Badge>
                 )}
@@ -282,7 +265,7 @@ export function IssueList({ issues, jiraBaseUrl, onIssueClick }: IssueListProps)
                 {issue.dueDate && (
                   <span
                     className={
-                      new Date(issue.dueDate) < new Date() && issue.status.category !== 'done'
+                      erForfalt(issue.dueDate, issue.status.category)
                         ? styles.overdue
                         : styles.dueDate
                     }
