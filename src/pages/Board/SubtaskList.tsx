@@ -7,10 +7,10 @@ interface SubtaskListProps {
   parentKey: string;
   jiraBaseUrl: string;
   fallback: JiraIssue[];
-  currentUserDisplayName?: string;
+  currentUserAccountId?: string;
 }
 
-export function SubtaskList({ parentKey, jiraBaseUrl, fallback, currentUserDisplayName }: SubtaskListProps) {
+export function SubtaskList({ parentKey, jiraBaseUrl, fallback, currentUserAccountId }: SubtaskListProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['childIssues', parentKey],
     queryFn: () => getChildIssues(parentKey),
@@ -26,7 +26,7 @@ export function SubtaskList({ parentKey, jiraBaseUrl, fallback, currentUserDispl
   return (
     <ul className={styles.subtasksList}>
       {children.map((child) => {
-        const isMe = !!currentUserDisplayName && child.assignee?.displayName === currentUserDisplayName;
+        const isMe = !!currentUserAccountId && child.assignee?.accountId === currentUserAccountId;
         return (
           <li key={child.key} className={`${styles.subtaskItem} ${isMe ? styles.subtaskItemMe : ''}`}>
             <span

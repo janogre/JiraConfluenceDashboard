@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom';
 import { Badge, LoadingOverlay } from '../../components/common';
 import {
   getProjects,
-  getMyIssues,
+  getMyBoardIssues,
+  getProjectBoardIssues,
   getChildIssuesForParents,
   getIssues,
   getTransitions,
@@ -16,6 +17,7 @@ import {
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraIssue } from '../../types';
+import { prioritetsVariant, erForfalt } from '../../utils/jiraVisning';
 import { Timeline } from './Timeline';
 import { ProjectPulse } from './ProjectPulse';
 import { IssueList } from './IssueList';
@@ -47,13 +49,37 @@ const COLUMNS = [
 
 type ColumnId = (typeof COLUMNS)[number]['id'];
 
+// Ansvarlig identifiseres på accountId; visningsnavn er kun reserve for eldre data.
+const ansvarligNokkel = (a?: { accountId?: string; displayName: string }) => a?.accountId ?? a?.displayName ?? '';
+
+function feilmelding(err: unknown): string {
+  const data = (err as { response?: { data?: { errorMessages?: string[]; errors?: Record<string, string> } } })?.response?.data;
+  const fraJira = [...(data?.errorMessages ?? []), ...Object.values(data?.errors ?? {})].join(' ');
+  if (fraJira) return fraJira;
+  return err instanceof Error ? err.message : 'ukjent feil';
+}
+
+// Relativ tid for aktivitetsfeeden («5 min siden», «i går»).
+const relativeTime = (dateString: string): string => {
+  const diff = Date.now() - new Date(dateString).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'akkurat nå';
+  if (minutes < 60) return `${minutes} min siden`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} t siden`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'i går';
+  if (days < 7) return `${days} dager siden`;
+  return new Date(dateString).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+};
+
 export function Board() {
   const [mode, setMode] = useState<'mine' | 'project' | 'list' | 'timeline' | 'activity' | 'pulse' | 'sprint' | 'search'>('mine');
   const [searchQuery, setSearchQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
-  const [showAllDone, setShowAllDone] = useState(false);
+  const [dragMelding, setDragMelding] = useState('');
   const [starredProjects, setStarredProjects] = useState<Set<string>>(loadStarredProjects);
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
   const [filterPriority, setFilterPriority] = useState('');
@@ -132,10 +158,12 @@ export function Board() {
 
   const { data: issues, isLoading, isError, refetch } = useQuery({
     queryKey: boardQueryKey,
-    queryFn: () =>
-      mode === 'mine' || (mode === 'list' && !selectedProjectKey)
-        ? getMyIssues()
-        : getIssues(undefined, projectJql, true),
+    queryFn: () => {
+      if (mode === 'mine' || (mode === 'list' && !selectedProjectKey)) return getMyBoardIssues(includeDone);
+      // Kanban viser også nylig ferdige saker i Ferdig-kolonnen.
+      if (mode === 'project') return getProjectBoardIssues(selectedProjectKey, includeDone);
+      return getIssues(undefined, projectJql, true);
+    },
     enabled:
       configured &&
       (mode === 'mine' ||
@@ -159,13 +187,31 @@ export function Board() {
     staleTime: 1000 * 60 * 30,
   });
 
+  const displayedIssues = issues ?? [];
+
+  // Foreldrenøkler i "Mine saker" — brukes til å hente alle barn uavhengig av tildeling.
+  // Må ligge før tidlig retur under, slik at hooks alltid kalles i samme rekkefølge.
+  const parentKeysInMineMode = mode === 'mine'
+    ? displayedIssues.map((i) => i.key)
+    : [];
+
+  const { data: extraChildren = [] } = useQuery({
+    queryKey: ['childIssuesForParents', parentKeysInMineMode],
+    queryFn: () => getChildIssuesForParents(parentKeysInMineMode),
+    enabled: configured && mode === 'mine' && parentKeysInMineMode.length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+
   const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const { draggableId: issueKey, source, destination } = result;
     if (source.droppableId === destination.droppableId) return;
 
     const targetCategory = destination.droppableId as ColumnId;
+    const kolonneNavn = COLUMNS.find((c) => c.id === targetCategory)?.label ?? targetCategory;
+    const issue = displayedIssues.find((i) => i.key === issueKey);
     const previousData = queryClient.getQueryData<JiraIssue[]>(boardQueryKey);
+    setDragMelding('');
 
     // Optimistisk oppdatering direkte i query-cache
     queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
@@ -178,11 +224,21 @@ export function Board() {
 
     try {
       const available = await getTransitions(issueKey);
-      const transition = available.find((t) => t.to.statusCategoryKey === targetCategory);
-      if (!transition) {
+      const kandidater = available.filter((t) => t.to.statusCategoryKey === targetCategory);
+      const maalStatuser = new Set(kandidater.map((t) => t.to.id));
+      if (kandidater.length === 0) {
         queryClient.setQueryData(boardQueryKey, previousData);
+        setDragMelding(`${issueKey} kan ikke flyttes direkte fra «${issue?.status.name ?? 'nåværende status'}» til «${kolonneNavn}» i arbeidsflyten. Åpne saken og velg en annen status.`);
         return;
       }
+      if (maalStatuser.size > 1) {
+        // Flere statuser hører til kolonnen — la brukeren velge i saksvinduet.
+        queryClient.setQueryData(boardQueryKey, previousData);
+        setDragMelding(`«${kolonneNavn}» har flere statuser for ${issueKey}: ${[...new Set(kandidater.map((t) => t.to.name))].join(', ')}. Velg status i saksvinduet.`);
+        if (issue) setSelectedIssue(issue);
+        return;
+      }
+      const transition = kandidater[0];
       await transitionIssue(issueKey, transition.id);
       // Oppdater også statusnavn etter vellykket overgang
       queryClient.setQueryData<JiraIssue[]>(boardQueryKey, (old) =>
@@ -193,8 +249,9 @@ export function Board() {
         )
       );
       queryClient.invalidateQueries({ queryKey: ['boardIssues'] });
-    } catch {
+    } catch (err) {
       queryClient.setQueryData(boardQueryKey, previousData);
+      setDragMelding(`Kunne ikke flytte ${issueKey} til «${kolonneNavn}»: ${feilmelding(err)}`);
     }
   };
 
@@ -215,35 +272,6 @@ export function Board() {
     // not configured
   }
 
-  const getPriorityVariant = (priority?: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'highest':
-      case 'high':
-        return 'danger' as const;
-      case 'medium':
-        return 'warning' as const;
-      default:
-        return 'default' as const;
-    }
-  };
-
-  const isOverdue = (dueDate?: string) =>
-    dueDate ? new Date(dueDate) < new Date() : false;
-
-  const displayedIssues = issues ?? [];
-
-  // Foreldrenøkler i "Mine saker" — brukes til å hente alle barn uavhengig av tildeling
-  const parentKeysInMineMode = mode === 'mine'
-    ? displayedIssues.map((i) => i.key)
-    : [];
-
-  const { data: extraChildren = [] } = useQuery({
-    queryKey: ['childIssuesForParents', parentKeysInMineMode],
-    queryFn: () => getChildIssuesForParents(parentKeysInMineMode),
-    enabled: configured && mode === 'mine' && parentKeysInMineMode.length > 0,
-    staleTime: 1000 * 60 * 5,
-  });
-
   // Bygg kart over barn basert på parent-felt (dekker vanlige child-saker, ikke bare suboppgavetypen)
   const derivedChildrenMap = new Map<string, JiraIssue[]>();
   [...displayedIssues, ...extraChildren].forEach((issue) => {
@@ -258,11 +286,8 @@ export function Board() {
   // Sett med saks-nøkler i den nåværende visningen — brukes til deduplisering av barn/forelder
   const myIssueKeys = new Set(displayedIssues.map((i) => i.key));
 
-  // Innlogget brukers visningsnavn — brukes til "Meg"-merket i underoppgavelisten.
-  const currentUserDisplayName = currentUser?.displayName;
-
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+  // Innlogget bruker — brukes til "Meg"-merket i underoppgavelisten.
+  const currentUserAccountId = currentUser?.accountId;
 
   // Derive unique priorities, assignees and labels for filter dropdowns
   const availablePriorities = [...new Set(
@@ -271,8 +296,13 @@ export function Board() {
   const availableAssignees = [...new Map(
     displayedIssues
       .filter((i) => i.assignee)
-      .map((i) => [i.assignee!.displayName, i.assignee!])
-  ).values()];
+      .map((i) => [ansvarligNokkel(i.assignee), i.assignee!])
+  ).entries()]
+    .map(([nokkel, a]) => ({ nokkel, displayName: a.displayName }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'nb'));
+  // Samme navn på flere personer: vis et skille i nedtrekkslisten.
+  const navneteller = new Map<string, number>();
+  availableAssignees.forEach((a) => navneteller.set(a.displayName, (navneteller.get(a.displayName) ?? 0) + 1));
   const availableLabels = [...new Set(
     displayedIssues.flatMap((i) => i.labels ?? [])
   )].sort();
@@ -296,14 +326,7 @@ export function Board() {
     let result = displayedIssues.filter(
       (issue) => !issue.parent?.key || !myIssueKeys.has(issue.parent.key)
     ).filter((issue) => issue.status.category === columnId);
-
-    // Done-filter: siste måned
-    if (columnId === 'done' && !showAllDone) {
-      result = result.filter((issue) => {
-        const date = issue.resolutionDate || issue.updated;
-        return new Date(date) >= oneMonthAgo;
-      });
-    }
+    // Ferdig-kolonnen begrenses til siste 30 dager i JQL-en (med mindre «Alle» er valgt).
 
     // Prioritetsfilter
     if (filterPriority) {
@@ -312,7 +335,7 @@ export function Board() {
 
     // Tildelt-filter
     if (filterAssignee) {
-      result = result.filter((issue) => issue.assignee?.displayName === filterAssignee);
+      result = result.filter((issue) => ansvarligNokkel(issue.assignee) === filterAssignee);
     }
 
     // Etikett-filter (saken må ha alle valgte etiketter)
@@ -351,7 +374,7 @@ export function Board() {
   // Timeline filtering: all shared filters apply
   const timelineIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
-    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (filterAssignee && ansvarligNokkel(issue.assignee) !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
     if (!matchesComponentFilter(issue)) return false;
     if (filterStatus) {
@@ -368,7 +391,7 @@ export function Board() {
   // List filtering: priority/assignee/label/component/status/issueType filters apply
   const listIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
-    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (filterAssignee && ansvarligNokkel(issue.assignee) !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
     if (!matchesComponentFilter(issue)) return false;
     if (filterStatus) {
@@ -385,29 +408,17 @@ export function Board() {
   // Pulse filtering: priority/assignee/label/component filters apply; category filtering handled inside ProjectPulse
   const pulseIssues = displayedIssues.filter((issue) => {
     if (filterPriority && issue.priority?.name !== filterPriority) return false;
-    if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+    if (filterAssignee && ansvarligNokkel(issue.assignee) !== filterAssignee) return false;
     if (!matchesLabelFilter(issue)) return false;
     if (!matchesComponentFilter(issue)) return false;
     return true;
   });
 
-  const relativeTime = (dateString: string): string => {
-    const diff = Date.now() - new Date(dateString).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'akkurat nå';
-    if (minutes < 60) return `${minutes} min siden`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} t siden`;
-    const days = Math.floor(hours / 24);
-    if (days === 1) return 'i går';
-    if (days < 7) return `${days} dager siden`;
-    return new Date(dateString).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
-  };
 
   const activityIssues = [...displayedIssues]
     .filter((issue) => {
       if (filterPriority && issue.priority?.name !== filterPriority) return false;
-      if (filterAssignee && issue.assignee?.displayName !== filterAssignee) return false;
+      if (filterAssignee && ansvarligNokkel(issue.assignee) !== filterAssignee) return false;
       if (!matchesLabelFilter(issue)) return false;
       if (!matchesComponentFilter(issue)) return false;
       return true;
@@ -482,12 +493,12 @@ export function Board() {
 
           <div className={styles.cardFooter}>
             {issue.priority && (
-              <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
+              <Badge variant={prioritetsVariant(issue.priority.name)} size="sm">
                 {issue.priority.name}
               </Badge>
             )}
             {issue.dueDate && (
-              <Badge variant={isOverdue(issue.dueDate) ? 'danger' : 'default'} size="sm">
+              <Badge variant={erForfalt(issue.dueDate, issue.status.category) ? 'danger' : 'default'} size="sm">
                 <Calendar size={10} />
                 {new Date(issue.dueDate).toLocaleDateString('nb-NO')}
               </Badge>
@@ -547,7 +558,7 @@ export function Board() {
                     parentKey={issue.key}
                     jiraBaseUrl={jiraBaseUrl}
                     fallback={derivedChildren}
-                    currentUserDisplayName={currentUserDisplayName}
+                    currentUserAccountId={currentUserAccountId}
                   />
                 )}
               </div>
@@ -737,7 +748,9 @@ export function Board() {
             >
               <option value="">Alle tildelte</option>
               {availableAssignees.map((a) => (
-                <option key={a.displayName} value={a.displayName}>{a.displayName}</option>
+                <option key={a.nokkel} value={a.nokkel}>
+                  {a.displayName}{(navneteller.get(a.displayName) ?? 0) > 1 ? ` (${a.nokkel.slice(-6)})` : ''}
+                </option>
               ))}
             </select>
 
@@ -905,6 +918,23 @@ export function Board() {
         </div>
       )}
 
+      {/* Melding fra dra-og-slipp (manglende overgang, flere statuser eller feil fra Jira) */}
+      {dragMelding && (
+        <div className={styles.errorBanner} role="status">
+          <AlertCircle size={16} />
+          <span>{dragMelding}</span>
+          <button
+            type="button"
+            className={styles.clearFiltersButton}
+            onClick={() => setDragMelding('')}
+            title="Lukk melding"
+            aria-label="Lukk melding"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Board */}
       {mode === 'search' ? (
         searchLoading ? (
@@ -1043,11 +1073,11 @@ export function Board() {
                     {column.id === 'done' && (
                       <button
                         className={styles.doneFilterButton}
-                        onClick={() => setShowAllDone((v) => !v)}
-                        title={showAllDone ? 'Vis kun siste måned' : 'Vis alle ferdige'}
+                        onClick={() => setIncludeDone((v) => !v)}
+                        title={includeDone ? 'Vis kun saker ferdigstilt siste 30 dager' : 'Hent alle ferdige saker'}
                       >
-                        {showAllDone ? <EyeOff size={14} /> : <Eye size={14} />}
-                        <span>{showAllDone ? 'Siste måned' : 'Alle'}</span>
+                        {includeDone ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <span>{includeDone ? 'Siste 30 dager' : 'Alle'}</span>
                       </button>
                     )}
                   </div>

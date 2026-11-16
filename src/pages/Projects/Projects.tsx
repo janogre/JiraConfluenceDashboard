@@ -15,6 +15,7 @@ import {
 } from '../../services/jiraService';
 import { isConfigured, getJiraBaseUrl } from '../../services/api';
 import type { JiraProject, JiraIssue } from '../../types';
+import { prioritetsVariant } from '../../utils/jiraVisning';
 import styles from './Projects.module.css';
 
 export function Projects() {
@@ -138,17 +139,7 @@ export function Projects() {
     }
   };
 
-  const getPriorityVariant = (priority?: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'highest':
-      case 'high':
-        return 'danger';
-      case 'medium':
-        return 'warning';
-      default:
-        return 'default';
-    }
-  };
+  const getPriorityVariant = prioritetsVariant;
 
   const formatTotalTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);

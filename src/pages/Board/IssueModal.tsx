@@ -5,23 +5,9 @@ import { Badge, Modal, Button } from '../../components/common';
 import { getTransitions, transitionIssue } from '../../services/jiraService';
 import { useTodoStore } from '../../store/todoStore';
 import type { JiraIssue } from '../../types';
+import { prioritetsVariant, erForfalt } from '../../utils/jiraVisning';
 import styles from './Board.module.css';
 
-function getPriorityVariant(priority?: string): 'danger' | 'warning' | 'default' {
-  switch (priority?.toLowerCase()) {
-    case 'highest':
-    case 'high':
-      return 'danger';
-    case 'medium':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-function isOverdue(dateStr: string): boolean {
-  return new Date(dateStr) < new Date(new Date().toDateString());
-}
 
 function toStatusCategory(key: string): 'new' | 'indeterminate' | 'done' {
   if (key === 'new' || key === 'done') return key;
@@ -92,7 +78,7 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
           {issue.priority && (
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Prioritet</span>
-              <Badge variant={getPriorityVariant(issue.priority.name)}>
+              <Badge variant={prioritetsVariant(issue.priority.name)}>
                 {issue.priority.name}
               </Badge>
             </div>
@@ -106,7 +92,7 @@ export function IssueModal({ issue, jiraBaseUrl, isOpen, onClose, onTransitioned
           {issue.dueDate && (
             <div className={styles.metaItem}>
               <span className={styles.metaLabel}>Frist</span>
-              <span className={isOverdue(issue.dueDate) ? styles.overdue : ''}>
+              <span className={erForfalt(issue.dueDate, issue.status.category) ? styles.overdue : ''}>
                 {new Date(issue.dueDate).toLocaleDateString('nb-NO')}
               </span>
             </div>

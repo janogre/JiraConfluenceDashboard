@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, ChevronUp, ChevronDown, AlertOctagon } from 'lucide-react';
 import { Badge } from '../../components/common';
 import type { JiraIssue } from '../../types';
+import { prioritetsSortering, prioritetsVariant } from '../../utils/jiraVisning';
 import listStyles from '../Board/IssueList.module.css';
 import teamStyles from './Team.module.css';
 
@@ -15,22 +16,8 @@ interface TeamIssueListProps {
 type SortKey = 'key' | 'summary' | 'status' | 'priority' | 'assignee' | 'dueDate' | 'updated';
 type SortDir = 'asc' | 'desc';
 
-const PRIORITY_ORDER: Record<string, number> = {
-  Highest: 5, High: 4, Medium: 3, Low: 2, Lowest: 1,
-};
-
-function getPriorityOrder(name?: string) {
-  return name ? (PRIORITY_ORDER[name] ?? 3) : 0;
-}
-
-function getPriorityVariant(priority?: string): 'danger' | 'warning' | 'default' {
-  switch (priority?.toLowerCase()) {
-    case 'highest':
-    case 'high': return 'danger';
-    case 'medium': return 'warning';
-    default: return 'default';
-  }
-}
+const getPriorityOrder = prioritetsSortering;
+const getPriorityVariant = prioritetsVariant;
 
 export function TeamIssueList({ issues, childrenMap, jiraBaseUrl, onIssueClick }: TeamIssueListProps) {
   const [sortKey, setSortKey] = useState<SortKey>('updated');

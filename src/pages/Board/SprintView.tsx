@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react';
 import { Badge, LoadingOverlay } from '../../components/common';
 import { getSprints, getSprintIssues } from '../../services/jiraService';
 import type { JiraIssue, JiraSprint } from '../../types';
+import { prioritetsVariant } from '../../utils/jiraVisning';
 import styles from './SprintView.module.css';
 
 interface SprintViewProps {
@@ -120,13 +121,6 @@ function BurndownChart({ issues, sprint }: { issues: JiraIssue[]; sprint: JiraSp
   );
 }
 
-function getPriorityVariant(name?: string) {
-  switch (name?.toLowerCase()) {
-    case 'highest': case 'high': return 'danger' as const;
-    case 'medium': return 'warning' as const;
-    default: return 'default' as const;
-  }
-}
 
 export function SprintView({ projectKey, jiraBaseUrl, onIssueClick }: SprintViewProps) {
   const [userSelectedSprintId, setUserSelectedSprintId] = useState<number | null>(null);
@@ -318,7 +312,7 @@ export function SprintView({ projectKey, jiraBaseUrl, onIssueClick }: SprintView
                         <p className={styles.cardSummary}>{issue.summary}</p>
                         <div className={styles.cardFooter}>
                           {issue.priority && (
-                            <Badge variant={getPriorityVariant(issue.priority.name)} size="sm">
+                            <Badge variant={prioritetsVariant(issue.priority.name)} size="sm">
                               {issue.priority.name}
                             </Badge>
                           )}
